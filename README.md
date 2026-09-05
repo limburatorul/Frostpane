@@ -14,9 +14,10 @@ de niciun runtime instalat separat.
 Aplicația pornește fără fereastră proprie: o găsești în tray. Din meniul ei creezi primul fence,
 pornești aplicația odată cu Windows, sau verifici actualizările.
 
-**Actualizare automată.** La pornire, aplicația întreabă GitHub dacă există un release mai nou și,
-dacă da, te anunță printr-o notificare. Accepți, ea descarcă installer-ul, îl rulează silențios și
-repornește singură. Nu e nevoie de cont sau token: repo-ul e public.
+**Actualizare automată.** La pornire, și apoi din 6 în 6 ore, aplicația întreabă GitHub dacă există
+un release mai nou. Dacă da, te întreabă o singură dată dacă vrei să-l instaleze — refuzul se ține
+minte pentru versiunea aia. Accepți, ea descarcă installer-ul, îl rulează silențios și repornește
+singură. Nu e nevoie de cont sau token: repo-ul e public.
 
 ## Din surse
 
