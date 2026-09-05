@@ -1,20 +1,20 @@
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Threading;
-using Fences.Core;
-using Fences.Desktop;
-using Fences.Interop;
-using Fences.Model;
-using Fences.Ui;
+using Frostpane.Core;
+using Frostpane.Desktop;
+using Frostpane.Interop;
+using Frostpane.Model;
+using Frostpane.Ui;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
 
-namespace Fences;
+namespace Frostpane;
 
 public partial class App : Application
 {
     private DesktopLayer? _layer;
-    private FenceManager? _manager;
+    private PaneManager? _manager;
     private NotifyIcon? _tray;
     private ToolStripItem? _updateItem;
     private DispatcherTimer? _updateTimer;
@@ -28,18 +28,18 @@ public partial class App : Application
         if (!_layer.IsValid)
         {
             MessageBox.Show("Nu am găsit desktopul Explorer-ului (SHELLDLL_DefView).",
-                            "Fences", MessageBoxButton.OK, MessageBoxImage.Error);
+                            "Frostpane", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
             return;
         }
 
-        _manager = new FenceManager(_layer);
+        _manager = new PaneManager(_layer);
         _manager.ContextMenuRequested += ShowFenceMenu;
 
         _tray = new NotifyIcon
         {
             Icon = AppIcon(),
-            Text = $"Fences {Updater.Current.ToString(3)}",
+            Text = $"Frostpane {Updater.Current.ToString(3)}",
             Visible = true,
             ContextMenuStrip = BuildTrayMenu(),
         };
@@ -71,7 +71,7 @@ public partial class App : Application
     private ContextMenuStrip BuildTrayMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Fence nou", null, (_, _) => NewFenceAtCursor());
+        menu.Items.Add("Panou nou", null, (_, _) => NewFenceAtCursor());
         menu.Items.Add("Portal nou…", null, (_, _) => NewPortalAtCursor());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Eliberează toate iconițele", null, (_, _) => _manager!.ReleaseAllIcons());
@@ -107,31 +107,31 @@ public partial class App : Application
                          picker.SelectedPath);
     }
 
-    private void ShowFenceMenu(Fence fence, IconTile? tile, POINT screen)
+    private void ShowFenceMenu(Pane pane, IconTile? tile, POINT screen)
     {
         var menu = new ContextMenuStrip();
 
         if (tile is not null)
         {
-            menu.Items.Add("Deschide", null, (_, _) => _manager!.InvokeVerb(fence, tile.Id, null));
-            if (!fence.IsPortal)
+            menu.Items.Add("Deschide", null, (_, _) => _manager!.InvokeVerb(pane, tile.Id, null));
+            if (!pane.IsPortal)
             {
-                menu.Items.Add("Redenumește fișierul…", null, (_, _) => _manager!.InvokeVerb(fence, tile.Id, "rename"));
-                menu.Items.Add("Șterge fișierul", null, (_, _) => _manager!.InvokeVerb(fence, tile.Id, "delete"));
+                menu.Items.Add("Redenumește fișierul…", null, (_, _) => _manager!.InvokeVerb(pane, tile.Id, "rename"));
+                menu.Items.Add("Șterge fișierul", null, (_, _) => _manager!.InvokeVerb(pane, tile.Id, "delete"));
             }
-            menu.Items.Add("Proprietăți", null, (_, _) => _manager!.InvokeVerb(fence, tile.Id, "properties"));
+            menu.Items.Add("Proprietăți", null, (_, _) => _manager!.InvokeVerb(pane, tile.Id, "properties"));
             menu.Items.Add(new ToolStripSeparator());
         }
 
-        menu.Items.Add("Redenumește fence-ul…", null, (_, _) =>
+        menu.Items.Add("Redenumește panoul…", null, (_, _) =>
         {
-            string? name = Prompt.AskText("Redenumește fence-ul", fence.Label);
-            if (!string.IsNullOrWhiteSpace(name)) _manager!.Rename(fence, name);
+            string? name = Prompt.AskText("Redenumește panoul", pane.Label);
+            if (!string.IsNullOrWhiteSpace(name)) _manager!.Rename(pane, name);
         });
-        menu.Items.Add(fence.RolledUp ? "Depliază" : "Pliază", null, (_, _) => _manager!.ToggleRollUp(fence));
+        menu.Items.Add(pane.RolledUp ? "Depliază" : "Pliază", null, (_, _) => _manager!.ToggleRollUp(pane));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Fence nou aici", null, (_, _) => _manager!.Create(_layer!.ScreenToDesktop(screen)));
-        menu.Items.Add("Șterge fence-ul", null, (_, _) => _manager!.Remove(fence));
+        menu.Items.Add("Panou nou aici", null, (_, _) => _manager!.Create(_layer!.ScreenToDesktop(screen)));
+        menu.Items.Add("Șterge panoul", null, (_, _) => _manager!.Remove(pane));
 
         menu.Show(new System.Drawing.Point(screen.X, screen.Y));
     }
@@ -145,7 +145,7 @@ public partial class App : Application
         {
             if (announce)
                 MessageBox.Show($"Folosești deja cea mai nouă versiune ({Updater.Current.ToString(3)}).",
-                                "Fences", MessageBoxButton.OK, MessageBoxImage.Information);
+                                "Frostpane", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -153,7 +153,7 @@ public partial class App : Application
 
         _pending = update;
         if (_updateItem is not null) _updateItem.Text = $"Instalează versiunea {label}";
-        if (_tray is not null) _tray.Text = $"Fences {Updater.Current.ToString(3)} — {label} disponibilă";
+        if (_tray is not null) _tray.Text = $"Frostpane {Updater.Current.ToString(3)} — {label} disponibilă";
 
         // A tray balloon goes through the Windows notification centre, where it is routinely
         // suppressed, so the offer has to be a dialog. Declining silences that one version.
@@ -167,7 +167,7 @@ public partial class App : Application
 
         var answer = MessageBox.Show($"Versiunea {label} e disponibilă (ai {Updater.Current.ToString(3)}).\n\n" +
                                      "O instalez acum? Aplicația se va reporni singură.",
-                                     "Fences", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                                     "Frostpane", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (answer != MessageBoxResult.Yes)
         {
             if (_manager is not null) _manager.SkippedUpdate = label;
@@ -187,7 +187,7 @@ public partial class App : Application
         }
 
         MessageBox.Show("Nu am reușit să descarc actualizarea. Încearcă mai târziu.",
-                        "Fences", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        "Frostpane", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     protected override void OnExit(ExitEventArgs e)

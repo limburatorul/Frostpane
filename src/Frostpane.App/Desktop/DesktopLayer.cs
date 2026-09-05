@@ -1,14 +1,14 @@
-using Fences.Interop;
+using Frostpane.Interop;
 
-namespace Fences.Desktop;
+namespace Frostpane.Desktop;
 
 /// <summary>
 /// The desktop's own windows, and the coordinate space its icons live in.
 ///
 /// The shell reports icon positions relative to the client area of the window hosting the icon
 /// view, whose origin is the top-left of the virtual screen — above and to the left of the primary
-/// monitor whenever another monitor is placed there. Fences are stored in that same space, so a
-/// fence and the icons it holds stay together however the monitors are arranged.
+/// monitor whenever another monitor is placed there. Panes are stored in that same space, so a
+/// pane and the icons it holds stay together however the monitors are arranged.
 /// </summary>
 internal sealed class DesktopLayer
 {

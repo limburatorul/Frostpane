@@ -1,9 +1,9 @@
-; Inno Setup script for Fences. Build it through build.ps1, which publishes the app first
+; Inno Setup script for Frostpane. Build it through build.ps1, which publishes the app first
 ; and passes the version in.
 
-#define AppName "Fences"
+#define AppName "Frostpane"
 #define AppPublisher "limburatorul"
-#define AppUrl "https://github.com/limburatorul/Fences"
+#define AppUrl "https://github.com/limburatorul/Frostpane"
 
 #ifndef AppVersion
   #define AppVersion "1.0.0"
@@ -11,7 +11,7 @@
 
 [Setup]
 ; Never change AppId: it is what ties an update to the installation it replaces.
-AppId={{A6B11999-0E83-4EA5-AC57-E892ECD4A6AE}
+AppId={{82C24B45-5C50-4728-BB6B-5B2134B44C5C}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
@@ -27,19 +27,19 @@ DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 DisableDirPage=auto
-UninstallDisplayIcon={app}\Fences.exe
+UninstallDisplayIcon={app}\Frostpane.exe
 UninstallDisplayName={#AppName}
 
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
-; Fences holds its own files open, so let the Restart Manager shut it down first.
+; Frostpane holds its own files open, so let the Restart Manager shut it down first.
 CloseApplications=yes
 RestartApplications=yes
 
 OutputDir=..\dist
-OutputBaseFilename=Fences-{#AppVersion}-setup
-SetupIconFile=..\src\Fences.App\app.ico
+OutputBaseFilename=Frostpane-{#AppVersion}-setup
+SetupIconFile=..\src\Frostpane.App\app.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -54,16 +54,16 @@ Name: "desktopicon"; Description: "Creează o scurtătură pe desktop"; GroupDes
 Source: "..\dist\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\Fences.exe"
+Name: "{group}\{#AppName}"; Filename: "{app}\Frostpane.exe"
 Name: "{group}\Dezinstalează {#AppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Fences.exe"; Tasks: desktopicon
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Frostpane.exe"; Tasks: desktopicon
 
 [Run]
 ; No skipifsilent: a silent update must bring the app back up by itself.
-Filename: "{app}\Fences.exe"; Description: "Pornește {#AppName}"; Flags: nowait postinstall
+Filename: "{app}\Frostpane.exe"; Description: "Pornește {#AppName}"; Flags: nowait postinstall
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{userappdata}\Fences"
+Type: filesandordirs; Name: "{userappdata}\Frostpane"
 
 [Code]
 { Autostart is owned by the app's own tray menu, so the uninstaller has to clear it. }
@@ -71,5 +71,5 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usPostUninstall then
     RegDeleteValue(HKEY_CURRENT_USER,
-                   'Software\Microsoft\Windows\CurrentVersion\Run', 'Fences');
+                   'Software\Microsoft\Windows\CurrentVersion\Run', 'Frostpane');
 end;

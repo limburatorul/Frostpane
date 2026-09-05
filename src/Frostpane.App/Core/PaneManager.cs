@@ -4,21 +4,21 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Size = System.Windows.Size;
-using Fences.Desktop;
-using Fences.Interop;
-using Fences.Model;
-using Fences.Ui;
+using Frostpane.Desktop;
+using Frostpane.Interop;
+using Frostpane.Model;
+using Frostpane.Ui;
 
-namespace Fences.Core;
+namespace Frostpane.Core;
 
 /// <summary>
-/// Keeps the fences, their windows and the shell's icons in agreement.
+/// Keeps the panes, their windows and the shell's icons in agreement.
 ///
-/// An icon a fence owns is parked far off-screen so the shell stops drawing it, and the fence
-/// window draws it instead. Icons no fence owns are left alone: the shell still lays them out,
+/// An icon a pane owns is parked far off-screen so the shell stops drawing it, and the pane
+/// window draws it instead. Icons no pane owns are left alone: the shell still lays them out,
 /// launches them and handles their drag and drop, exactly as on a bare desktop.
 /// </summary>
-internal sealed class FenceManager : IDisposable
+internal sealed class PaneManager : IDisposable
 {
     /// <summary>Where owned icons are parked. Far below any real monitor, and the shell keeps it.</summary>
     private const int ParkY = 30000;
@@ -28,7 +28,7 @@ internal sealed class FenceManager : IDisposable
 
     private readonly DesktopLayer _layer;
     private readonly DesktopIcons _icons = new();
-    private readonly Dictionary<string, FenceWindow> _windows = new();
+    private readonly Dictionary<string, PaneWindow> _windows = new();
     private readonly Dictionary<string, ImageSource?> _imageCache = new();
     private readonly DispatcherTimer _timer;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
@@ -37,14 +37,14 @@ internal sealed class FenceManager : IDisposable
     private WallpaperCapture? _capture;
     private BitmapSource? _wallpaper;
 
-    public FenceManager(DesktopLayer layer)
+    public PaneManager(DesktopLayer layer)
     {
         _layer = layer;
-        _layout = FenceStore.Load();
+        _layout = PaneStore.Load();
 
         _icons.AllowFreePositioning();
 
-        foreach (var fence in _layout.Fences) OpenWindow(fence);
+        foreach (var pane in _layout.Panes) OpenWindow(pane);
 
         _timer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher.CurrentDispatcher)
         {
@@ -66,7 +66,7 @@ internal sealed class FenceManager : IDisposable
         }
         catch (Exception)
         {
-            // No capture means no blur; the fences stay plainly translucent, which still works.
+            // No capture means no blur; the panes stay plainly translucent, which still works.
             _capture = null;
         }
     }
@@ -92,9 +92,9 @@ internal sealed class FenceManager : IDisposable
         }
         StartCapture();
 
-        foreach (var fence in _layout.Fences)
-            if (_windows.TryGetValue(fence.Id, out var window))
-                Place(fence, window);
+        foreach (var pane in _layout.Panes)
+            if (_windows.TryGetValue(pane.Id, out var window))
+                Place(pane, window);
     }
 
     // ---------- blurred backdrop ----------
@@ -110,23 +110,23 @@ internal sealed class FenceManager : IDisposable
         _wallpaper = image;
 
         _wallpaperSource = new Size(frame.SourceWidth, frame.SourceHeight);
-        foreach (var fence in _layout.Fences) ApplyBackdrop(fence);
+        foreach (var pane in _layout.Panes) ApplyBackdrop(pane);
     }
 
     private Size _wallpaperSource;
 
-    /// <summary>Cuts the part of the blurred desktop that lies behind this fence.</summary>
-    private void ApplyBackdrop(Fence fence)
+    /// <summary>Cuts the part of the blurred desktop that lies behind this pane.</summary>
+    private void ApplyBackdrop(Pane pane)
     {
-        if (_wallpaper is null || !_windows.TryGetValue(fence.Id, out var window)) return;
+        if (_wallpaper is null || !_windows.TryGetValue(pane.Id, out var window)) return;
 
         double scaleX = _wallpaper.PixelWidth / _wallpaperSource.Width;
         double scaleY = _wallpaper.PixelHeight / _wallpaperSource.Height;
 
-        int x = (int)Math.Floor(fence.X * scaleX);
-        int y = (int)Math.Floor(fence.Y * scaleY);
-        int width = (int)Math.Ceiling(fence.Width * scaleX);
-        int height = (int)Math.Ceiling(fence.Height * scaleY);
+        int x = (int)Math.Floor(pane.X * scaleX);
+        int y = (int)Math.Floor(pane.Y * scaleY);
+        int width = (int)Math.Ceiling(pane.Width * scaleX);
+        int height = (int)Math.Ceiling(pane.Height * scaleY);
 
         x = Math.Clamp(x, 0, _wallpaper.PixelWidth - 1);
         y = Math.Clamp(y, 0, _wallpaper.PixelHeight - 1);
@@ -145,14 +145,14 @@ internal sealed class FenceManager : IDisposable
         set { _layout.SkippedUpdate = value; Save(); }
     }
 
-    /// <summary>Raised when a fence is right-clicked, with the screen point and the tile under it.</summary>
-    public event Action<Fence, IconTile?, POINT>? ContextMenuRequested;
+    /// <summary>Raised when a pane is right-clicked, with the screen point and the tile under it.</summary>
+    public event Action<Pane, IconTile?, POINT>? ContextMenuRequested;
 
-    // ---------- fences ----------
+    // ---------- panes ----------
 
-    public Fence Create(POINT desktopPoint, string label = "Fence", string? portalPath = null)
+    public Pane Create(POINT desktopPoint, string label = "Pane", string? portalPath = null)
     {
-        var fence = new Fence
+        var pane = new Pane
         {
             Label = label,
             PortalPath = portalPath,
@@ -162,87 +162,87 @@ internal sealed class FenceManager : IDisposable
             Height = 360,
             ExpandedHeight = 360,
         };
-        _layout.Fences.Add(fence);
-        OpenWindow(fence);
+        _layout.Panes.Add(pane);
+        OpenWindow(pane);
         Save();
         Reconcile();
-        return fence;
+        return pane;
     }
 
-    public void Remove(Fence fence)
+    public void Remove(Pane pane)
     {
-        ReleaseIcons(fence, forget: true);         // never leave icons parked with no fence to show them
+        ReleaseIcons(pane, forget: true);         // never leave icons parked with no pane to show them
 
-        if (_windows.Remove(fence.Id, out var window)) window.Close();
-        _layout.Fences.Remove(fence);
+        if (_windows.Remove(pane.Id, out var window)) window.Close();
+        _layout.Panes.Remove(pane);
         Save();
     }
 
-    public void Rename(Fence fence, string label)
+    public void Rename(Pane pane, string label)
     {
-        fence.Label = label;
-        if (_windows.TryGetValue(fence.Id, out var window)) window.Label = label;
+        pane.Label = label;
+        if (_windows.TryGetValue(pane.Id, out var window)) window.Label = label;
         Save();
     }
 
-    public void ToggleRollUp(Fence fence)
+    public void ToggleRollUp(Pane pane)
     {
-        if (fence.RolledUp)
+        if (pane.RolledUp)
         {
-            fence.RolledUp = false;
-            fence.Height = fence.ExpandedHeight;
+            pane.RolledUp = false;
+            pane.Height = pane.ExpandedHeight;
         }
         else
         {
-            fence.ExpandedHeight = fence.Height;
-            fence.RolledUp = true;
-            fence.Height = TitleHeight(fence);
+            pane.ExpandedHeight = pane.Height;
+            pane.RolledUp = true;
+            pane.Height = TitleHeight(pane);
         }
 
-        if (_windows.TryGetValue(fence.Id, out var window))
+        if (_windows.TryGetValue(pane.Id, out var window))
         {
-            window.SetRolledUp(fence.RolledUp);
-            Place(fence, window);
+            window.SetRolledUp(pane.RolledUp);
+            Place(pane, window);
         }
         Save();
     }
 
-    private int TitleHeight(Fence fence) =>
-        _windows.TryGetValue(fence.Id, out var window)
+    private int TitleHeight(Pane pane) =>
+        _windows.TryGetValue(pane.Id, out var window)
             ? (int)Math.Round(30 * VisualTreeHelper.GetDpi(window).DpiScaleY)
             : 30;
 
-    private void OpenWindow(Fence fence)
+    private void OpenWindow(Pane pane)
     {
-        var window = new FenceWindow { Label = fence.Label };
-        _windows[fence.Id] = window;
+        var window = new PaneWindow { Label = pane.Label };
+        _windows[pane.Id] = window;
 
         window.BoundsChanged += bounds =>
         {
             var origin = _layer.Origin;
-            fence.X = bounds.Left - origin.X;
-            fence.Y = bounds.Top - origin.Y;
-            fence.Width = bounds.Width;
-            fence.Height = bounds.Height;
-            if (!fence.RolledUp) fence.ExpandedHeight = fence.Height;
-            ApplyBackdrop(fence);
+            pane.X = bounds.Left - origin.X;
+            pane.Y = bounds.Top - origin.Y;
+            pane.Width = bounds.Width;
+            pane.Height = bounds.Height;
+            if (!pane.RolledUp) pane.ExpandedHeight = pane.Height;
+            ApplyBackdrop(pane);
             Save();
             Reconcile();
         };
-        window.RollUpToggled += () => ToggleRollUp(fence);
-        window.ContextMenuRequested += (pt, tile) => ContextMenuRequested?.Invoke(fence, tile, pt);
-        window.ItemActivated += tile => InvokeVerb(fence, tile.Id, null);
-        window.ItemDropped += (tile, pt) => DropItem(fence, tile, pt);
+        window.RollUpToggled += () => ToggleRollUp(pane);
+        window.ContextMenuRequested += (pt, tile) => ContextMenuRequested?.Invoke(pane, tile, pt);
+        window.ItemActivated += tile => InvokeVerb(pane, tile.Id, null);
+        window.ItemDropped += (tile, pt) => DropItem(pane, tile, pt);
 
         window.Show();
-        window.SetRolledUp(fence.RolledUp);
-        Place(fence, window);
+        window.SetRolledUp(pane.RolledUp);
+        Place(pane, window);
     }
 
-    private void Place(Fence fence, FenceWindow window)
+    private void Place(Pane pane, PaneWindow window)
     {
         var origin = _layer.Origin;
-        window.SetBounds(fence.X + origin.X, fence.Y + origin.Y, fence.Width, fence.Height);
+        window.SetBounds(pane.X + origin.X, pane.Y + origin.Y, pane.Width, pane.Height);
     }
 
     // ---------- items ----------
@@ -251,9 +251,9 @@ internal sealed class FenceManager : IDisposable
     /// Runs a shell verb on an item. Desktop items go through the shell view so the user gets
     /// the real dialogs; portal items are plain paths and go through ShellExecute.
     /// </summary>
-    public void InvokeVerb(Fence fence, string id, string? verb)
+    public void InvokeVerb(Pane pane, string id, string? verb)
     {
-        if (!fence.IsPortal)
+        if (!pane.IsPortal)
         {
             WithIndex(id, index => _icons.Verb(index, verb));
             return;
@@ -279,8 +279,8 @@ internal sealed class FenceManager : IDisposable
         if (icon is not null) action(icon.Index);
     }
 
-    /// <summary>Moves a dragged tile to whichever fence it was dropped on, or back to the desktop.</summary>
-    private void DropItem(Fence from, IconTile tile, POINT screen)
+    /// <summary>Moves a dragged tile to whichever pane it was dropped on, or back to the desktop.</summary>
+    private void DropItem(Pane from, IconTile tile, POINT screen)
     {
         // A portal mirrors a folder; dragging out of one would have to move files on disk.
         if (from.IsPortal) return;
@@ -307,70 +307,70 @@ internal sealed class FenceManager : IDisposable
         Reconcile();
     }
 
-    /// <summary>Drops the item at the slot the pointer is over, so a fence can be ordered by hand.</summary>
-    private void Reorder(Fence fence, string id, POINT point)
+    /// <summary>Drops the item at the slot the pointer is over, so a pane can be ordered by hand.</summary>
+    private void Reorder(Pane pane, string id, POINT point)
     {
-        if (!_windows.TryGetValue(fence.Id, out var window)) return;
+        if (!_windows.TryGetValue(pane.Id, out var window)) return;
 
-        int slot = SlotAt(fence, window, point);
-        fence.Items.Remove(id);
-        fence.Items.Insert(Math.Clamp(slot, 0, fence.Items.Count), id);
+        int slot = SlotAt(pane, window, point);
+        pane.Items.Remove(id);
+        pane.Items.Insert(Math.Clamp(slot, 0, pane.Items.Count), id);
     }
 
-    private int SlotAt(Fence fence, FenceWindow window, POINT point)
+    private int SlotAt(Pane pane, PaneWindow window, POINT point)
     {
         double scale = VisualTreeHelper.GetDpi(window).DpiScaleX;
         int tile = (int)Math.Round(90 * scale);          // tile box plus its margin
-        int columns = Math.Max(1, (fence.Width - (int)(12 * scale)) / tile);
+        int columns = Math.Max(1, (pane.Width - (int)(12 * scale)) / tile);
 
-        int col = Math.Clamp((point.X - fence.X - (int)(6 * scale)) / tile, 0, columns - 1);
-        int row = Math.Max(0, (point.Y - fence.Y - TitleHeight(fence) - (int)(4 * scale)) / tile);
+        int col = Math.Clamp((point.X - pane.X - (int)(6 * scale)) / tile, 0, columns - 1);
+        int row = Math.Max(0, (point.Y - pane.Y - TitleHeight(pane) - (int)(4 * scale)) / tile);
         return row * columns + col;
     }
 
-    private Fence? FenceAt(POINT desktopPoint) =>
-        _layout.Fences.LastOrDefault(f => f.Contains(desktopPoint.X, desktopPoint.Y));
+    private Pane? FenceAt(POINT desktopPoint) =>
+        _layout.Panes.LastOrDefault(f => f.Contains(desktopPoint.X, desktopPoint.Y));
 
     // ---------- reconciliation ----------
 
     /// <summary>
-    /// Adopts icons dropped onto a fence, parks every owned icon out of the shell's way, and
-    /// refreshes what each fence window draws.
+    /// Adopts icons dropped onto a pane, parks every owned icon out of the shell's way, and
+    /// refreshes what each pane window draws.
     /// </summary>
     public void Reconcile()
     {
         if (!_layer.IsValid) RecoverFromShellRestart();
 
         var icons = _icons.Snapshot();
-        if (icons.Count == 0 && _layout.Fences.Count == 0) return;
+        if (icons.Count == 0 && _layout.Panes.Count == 0) return;
 
         var byId = icons.ToDictionary(i => i.Id);
-        var owned = new HashSet<string>(_layout.Fences.SelectMany(f => f.Items));
+        var owned = new HashSet<string>(_layout.Panes.SelectMany(f => f.Items));
         bool changed = false;
 
         foreach (var icon in icons)
         {
             if (owned.Contains(icon.Id) || icon.Position.Y >= ParkedThreshold) continue;
-            if (FenceAt(icon.Position) is not { IsPortal: false } fence) continue;
-            fence.Items.Add(icon.Id);
+            if (FenceAt(icon.Position) is not { IsPortal: false } pane) continue;
+            pane.Items.Add(icon.Id);
             owned.Add(icon.Id);
             changed = true;
         }
 
         var moves = new List<(int, POINT)>();
-        foreach (var fence in _layout.Fences)
+        foreach (var pane in _layout.Panes)
         {
-            if (fence.IsPortal) { RefreshPortal(fence); continue; }
+            if (pane.IsPortal) { RefreshPortal(pane); continue; }
 
-            changed |= fence.Items.RemoveAll(id => !byId.ContainsKey(id)) > 0;
+            changed |= pane.Items.RemoveAll(id => !byId.ContainsKey(id)) > 0;
 
-            for (int i = 0; i < fence.Items.Count; i++)
+            for (int i = 0; i < pane.Items.Count; i++)
             {
-                var icon = byId[fence.Items[i]];
+                var icon = byId[pane.Items[i]];
                 if (icon.Position.Y < ParkedThreshold) moves.Add((icon.Index, new POINT(i * 8, ParkY)));
             }
 
-            Refresh(fence, byId);
+            Refresh(pane, byId);
         }
 
         RescueOrphans(icons, owned, moves);
@@ -380,7 +380,7 @@ internal sealed class FenceManager : IDisposable
     }
 
     /// <summary>
-    /// Brings back icons that are parked but belong to no fence. Without this a crash, or a
+    /// Brings back icons that are parked but belong to no pane. Without this a crash, or a
     /// layout file that failed to save, would leave icons parked off-screen and apparently gone.
     /// </summary>
     private void RescueOrphans(IReadOnlyList<DesktopIcon> icons, HashSet<string> owned, List<(int, POINT)> moves)
@@ -412,14 +412,14 @@ internal sealed class FenceManager : IDisposable
     }
 
     /// <summary>Mirrors the portal's folder into its window.</summary>
-    private void RefreshPortal(Fence fence)
+    private void RefreshPortal(Pane pane)
     {
-        if (!_windows.TryGetValue(fence.Id, out var window)) return;
+        if (!_windows.TryGetValue(pane.Id, out var window)) return;
 
         List<string> paths;
         try
         {
-            paths = Directory.EnumerateFileSystemEntries(fence.PortalPath!)
+            paths = Directory.EnumerateFileSystemEntries(pane.PortalPath!)
                              .Where(path => !System.IO.Path.GetFileName(path).Equals("desktop.ini", StringComparison.OrdinalIgnoreCase))
                              .OrderBy(System.IO.Path.GetFileName, StringComparer.CurrentCultureIgnoreCase)
                              .ToList();
@@ -452,12 +452,12 @@ internal sealed class FenceManager : IDisposable
             ? System.IO.Path.GetFileNameWithoutExtension(path)
             : System.IO.Path.GetFileName(path);
 
-    /// <summary>Rebuilds a fence window's tiles, reusing the ones already there.</summary>
-    private void Refresh(Fence fence, Dictionary<string, DesktopIcon> byId)
+    /// <summary>Rebuilds a pane window's tiles, reusing the ones already there.</summary>
+    private void Refresh(Pane pane, Dictionary<string, DesktopIcon> byId)
     {
-        if (!_windows.TryGetValue(fence.Id, out var window)) return;
+        if (!_windows.TryGetValue(pane.Id, out var window)) return;
 
-        var wanted = fence.Items.Where(byId.ContainsKey).ToList();
+        var wanted = pane.Items.Where(byId.ContainsKey).ToList();
         if (window.Items.Select(t => t.Id).SequenceEqual(wanted)) return;
 
         var existing = window.Items.ToDictionary(t => t.Id);
@@ -480,49 +480,49 @@ internal sealed class FenceManager : IDisposable
     }
 
     /// <summary>
-    /// Brings a fence's icons back onto the desktop, laid out where the fence is.
-    /// <paramref name="forget"/> also empties the fence; without it the fence keeps its contents
+    /// Brings a pane's icons back onto the desktop, laid out where the pane is.
+    /// <paramref name="forget"/> also empties the pane; without it the pane keeps its contents
     /// and simply re-parks them next time the app runs.
     /// </summary>
-    private void ReleaseIcons(Fence fence, bool forget)
+    private void ReleaseIcons(Pane pane, bool forget)
     {
-        if (fence.IsPortal) return;
+        if (pane.IsPortal) return;
 
         var byId = _icons.Snapshot().ToDictionary(i => i.Id);
         var spacing = _icons.Spacing;
         var moves = new List<(int, POINT)>();
 
-        for (int i = 0; i < fence.Items.Count; i++)
+        for (int i = 0; i < pane.Items.Count; i++)
         {
-            if (!byId.TryGetValue(fence.Items[i], out var icon)) continue;
-            moves.Add((icon.Index, new POINT(fence.X + i % 4 * spacing.X, fence.Y + i / 4 * spacing.Y)));
+            if (!byId.TryGetValue(pane.Items[i], out var icon)) continue;
+            moves.Add((icon.Index, new POINT(pane.X + i % 4 * spacing.X, pane.Y + i / 4 * spacing.Y)));
         }
 
-        if (forget) fence.Items.Clear();
+        if (forget) pane.Items.Clear();
         if (moves.Count > 0) _icons.Move(moves);
     }
 
     /// <summary>
     /// Puts every icon back on the desktop before the app goes away, so nothing is left parked
-    /// off-screen looking deleted. Fence membership is kept, so the layout survives a restart.
+    /// off-screen looking deleted. Pane membership is kept, so the layout survives a restart.
     /// </summary>
     public void ReleaseIconsForShutdown()
     {
-        foreach (var fence in _layout.Fences) ReleaseIcons(fence, forget: false);
+        foreach (var pane in _layout.Panes) ReleaseIcons(pane, forget: false);
         Save();
     }
 
-    /// <summary>Empties every fence back onto the desktop — the tray command.</summary>
+    /// <summary>Empties every pane back onto the desktop — the tray command.</summary>
     public void ReleaseAllIcons()
     {
-        foreach (var fence in _layout.Fences) ReleaseIcons(fence, forget: true);
+        foreach (var pane in _layout.Panes) ReleaseIcons(pane, forget: true);
 
         var byId = _icons.Snapshot().ToDictionary(i => i.Id);
-        foreach (var fence in _layout.Fences) Refresh(fence, byId);
+        foreach (var pane in _layout.Panes) Refresh(pane, byId);
         Save();
     }
 
-    public void Save() => FenceStore.Save(_layout);
+    public void Save() => PaneStore.Save(_layout);
 
     public void Dispose()
     {

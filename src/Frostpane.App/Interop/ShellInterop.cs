@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Fences.Interop;
+namespace Frostpane.Interop;
 
 [ComImport, Guid("6d5140c1-7436-11ce-8034-00aa006009fa"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 public interface IServiceProvider

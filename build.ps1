@@ -1,7 +1,7 @@
 <#
-    Publishes Fences and wraps it in an installer.
+    Publishes Frostpane and wraps it in an installer.
 
-    Output: dist\Fences-<version>-setup.exe
+    Output: dist\Frostpane-<version>-setup.exe
 
     The version comes from the csproj alone, so a release is bumped in exactly one place.
 #>
@@ -12,13 +12,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$project = Join-Path $root 'src\Fences.App\Fences.App.csproj'
+$project = Join-Path $root 'src\Frostpane.App\Frostpane.App.csproj'
 $publishDir = Join-Path $root 'dist\app'
 
 [xml]$csproj = Get-Content $project
 $version = $csproj.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
 if (-not $version) { throw "No <Version> in $project" }
-Write-Host "Fences $version" -ForegroundColor Cyan
+Write-Host "Frostpane $version" -ForegroundColor Cyan
 
 # Self-contained: the installer must not depend on a .NET runtime being present.
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
@@ -37,8 +37,8 @@ $iscc = @(
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { throw "ISCC.exe not found - install Inno Setup 6" }
 
-& $iscc "/DAppVersion=$version" (Join-Path $root 'installer\Fences.iss') /Q
+& $iscc "/DAppVersion=$version" (Join-Path $root 'installer\Frostpane.iss') /Q
 if ($LASTEXITCODE -ne 0) { throw "installer failed" }
 
-$setup = Join-Path $root "dist\Fences-$version-setup.exe"
+$setup = Join-Path $root "dist\Frostpane-$version-setup.exe"
 Write-Host ("  installer: {0} ({1:N1} MB)" -f $setup, ((Get-Item $setup).Length / 1MB)) -ForegroundColor Green

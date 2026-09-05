@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
-using Fences.Interop;
+using Frostpane.Interop;
 
-namespace Fences.Desktop;
+namespace Frostpane.Desktop;
 
 /// <summary>One item in the shell's desktop view.</summary>
 /// <param name="Index">Position in the view; only valid until the view changes.</param>
@@ -30,7 +30,7 @@ internal sealed class DesktopIcons
 
     /// <summary>
     /// Turns off auto-arrange and snap-to-grid. While either is on the shell overrides every
-    /// position we set, so a fence could never hold its icons in place.
+    /// position we set, so a pane could never hold its icons in place.
     /// </summary>
     public void AllowFreePositioning() =>
         Retry(v => v.SetCurrentFolderFlags(ShellIds.FWF_AUTOARRANGE | ShellIds.FWF_SNAPTOGRID, 0), 0);
@@ -78,7 +78,7 @@ internal sealed class DesktopIcons
 
     /// <summary>
     /// Moves icons in one shot. Batching matters: each call repaints the desktop, so moving a
-    /// fence full of icons one at a time would flicker.
+    /// pane full of icons one at a time would flicker.
     /// </summary>
     public void Move(IReadOnlyList<(int Index, POINT Position)> moves)
     {

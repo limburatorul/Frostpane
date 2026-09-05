@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 
-namespace Fences.Ui;
+namespace Frostpane.Ui;
 
 /// <summary>A one-line text prompt — the app's only modal dialog.</summary>
 internal static class Prompt

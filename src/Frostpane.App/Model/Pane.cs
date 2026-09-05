@@ -2,13 +2,13 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Fences.Model;
+namespace Frostpane.Model;
 
-/// <summary>One fence: a rectangle on the desktop that owns a set of icons.</summary>
-internal sealed class Fence
+/// <summary>One pane: a rectangle on the desktop that owns a set of icons.</summary>
+internal sealed class Pane
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string Label { get; set; } = "Fence";
+    public string Label { get; set; } = "Pane";
 
     /// <summary>Bounds in desktop coordinates — the same space the shell reports icon positions in.</summary>
     public int X { get; set; }
@@ -16,15 +16,15 @@ internal sealed class Fence
     public int Width { get; set; } = 520;
     public int Height { get; set; } = 360;
 
-    /// <summary>Height to restore to when the fence is unrolled.</summary>
+    /// <summary>Height to restore to when the pane is unrolled.</summary>
     public int ExpandedHeight { get; set; } = 360;
 
     public bool RolledUp { get; set; }
 
-    /// <summary>Parsing names of the desktop icons this fence owns, in display order.</summary>
+    /// <summary>Parsing names of the desktop icons this pane owns, in display order.</summary>
     public List<string> Items { get; set; } = new();
 
-    /// <summary>When set, the fence mirrors this folder instead of owning desktop icons.</summary>
+    /// <summary>When set, the pane mirrors this folder instead of owning desktop icons.</summary>
     public string? PortalPath { get; set; }
 
     [JsonIgnore] public bool IsPortal => !string.IsNullOrEmpty(PortalPath);
@@ -34,7 +34,7 @@ internal sealed class Fence
 
 internal sealed class Layout
 {
-    public List<Fence> Fences { get; set; } = new();
+    public List<Pane> Panes { get; set; } = new();
 
     /// <summary>
     /// A release the user chose not to install. Kept here rather than in a settings file of its
@@ -43,13 +43,13 @@ internal sealed class Layout
     public string? SkippedUpdate { get; set; }
 }
 
-/// <summary>Reads and writes the fence layout under %APPDATA%\Fences.</summary>
-internal static class FenceStore
+/// <summary>Reads and writes the pane layout under %APPDATA%\Frostpane.</summary>
+internal static class PaneStore
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
     public static string Path { get; } = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Fences", "layout.json");
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Frostpane", "layout.json");
 
     public static Layout Load()
     {

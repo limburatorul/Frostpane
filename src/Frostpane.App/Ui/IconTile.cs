@@ -1,9 +1,9 @@
 using System.ComponentModel;
 using System.Windows.Media;
 
-namespace Fences.Ui;
+namespace Frostpane.Ui;
 
-/// <summary>One icon as drawn inside a fence.</summary>
+/// <summary>One icon as drawn inside a pane.</summary>
 internal sealed class IconTile : INotifyPropertyChanged
 {
     private ImageSource? _image;
@@ -15,7 +15,7 @@ internal sealed class IconTile : INotifyPropertyChanged
         Name = name;
     }
 
-    /// <summary>Shell parsing name — the identity the fence layout is stored against.</summary>
+    /// <summary>Shell parsing name — the identity the pane layout is stored against.</summary>
     public string Id { get; }
 
     public string Name { get; }

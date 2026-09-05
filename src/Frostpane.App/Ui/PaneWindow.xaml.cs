@@ -3,22 +3,22 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
-using Fences.Interop;
+using Frostpane.Interop;
 using Point = System.Windows.Point;
 
-namespace Fences.Ui;
+namespace Frostpane.Ui;
 
 internal enum Grip { None, Move, Left, Right, Top, Bottom, TopLeft, TopRight, BottomLeft, BottomRight }
 
 /// <summary>
-/// One fence, as a top-level window pinned to the bottom of the Z-order.
+/// One pane, as a top-level window pinned to the bottom of the Z-order.
 ///
 /// Top-level is the only placement that survives a GPU-composited wallpaper such as Wallpaper
 /// Engine — a window parented into the desktop hierarchy is simply never drawn while one runs.
-/// The cost is that the shell's icons can never appear on top of a fence, so the icons a fence
+/// The cost is that the shell's icons can never appear on top of a pane, so the icons a pane
 /// owns are parked off-screen and drawn here instead.
 /// </summary>
-public partial class FenceWindow : Window
+public partial class PaneWindow : Window
 {
     private static readonly IntPtr HWND_BOTTOM = new(1);
 
@@ -39,7 +39,7 @@ public partial class FenceWindow : Window
 
     internal ObservableCollection<IconTile> Items { get; } = new();
 
-    public FenceWindow()
+    public PaneWindow()
     {
         InitializeComponent();
         Tiles.ItemsSource = Items;
@@ -68,7 +68,7 @@ public partial class FenceWindow : Window
 
     public void SetRolledUp(bool rolled) => Body.Visibility = rolled ? Visibility.Collapsed : Visibility.Visible;
 
-    /// <summary>Paints a blurred sample of the wallpaper behind the fence contents.</summary>
+    /// <summary>Paints a blurred sample of the wallpaper behind the pane contents.</summary>
     internal void SetBackdrop(ImageSource? image) =>
         Backdrop.Background = image is null ? null : new ImageBrush(image) { Stretch = Stretch.Fill };
 
@@ -85,7 +85,7 @@ public partial class FenceWindow : Window
     }
 
     /// <summary>
-    /// Rewrites every Z-order change to "bottom". A fence belongs on the desktop, so it must
+    /// Rewrites every Z-order change to "bottom". A pane belongs on the desktop, so it must
     /// never rise above an ordinary window, however it came to be repositioned.
     /// </summary>
     private static IntPtr KeepAtBottom(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)

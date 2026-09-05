@@ -1,22 +1,22 @@
 using System.Runtime.InteropServices;
-using Fences.Interop;
+using Frostpane.Interop;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
 
-namespace Fences.Desktop;
+namespace Frostpane.Desktop;
 
 /// <summary>A downscaled, blurred snapshot of the whole desktop background.</summary>
 /// <param name="Pixels">BGRA rows, tightly packed.</param>
 internal sealed record WallpaperFrame(byte[] Pixels, int Width, int Height, int SourceWidth, int SourceHeight);
 
 /// <summary>
-/// Captures the desktop background so fences can show it blurred behind their contents.
+/// Captures the desktop background so panes can show it blurred behind their contents.
 ///
 /// Neither DWM backdrop — the Windows 11 acrylic attribute nor the older accent policy — can see
 /// an animated wallpaper drawn by Wallpaper Engine: both sample the static wallpaper bitmap and
 /// come out a flat colour. Capturing Progman instead picks up whatever is actually painting the
-/// background. Fences are top-level windows, so they are not part of Progman and never appear in
+/// background. Panes are top-level windows, so they are not part of Progman and never appear in
 /// their own backdrop.
 /// </summary>
 internal sealed class WallpaperCapture : IDisposable

@@ -1,9 +1,9 @@
 using Microsoft.Win32;
 
-namespace Fences.Core;
+namespace Frostpane.Core;
 
 /// <summary>
-/// Whether Fences starts with Windows.
+/// Whether Frostpane starts with Windows.
 ///
 /// The app owns this rather than the installer, so a silent update cannot quietly re-enable
 /// something the user turned off.
@@ -11,7 +11,7 @@ namespace Fences.Core;
 internal static class Autostart
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string ValueName = "Fences";
+    private const string ValueName = "Frostpane";
 
     public static bool Enabled
     {

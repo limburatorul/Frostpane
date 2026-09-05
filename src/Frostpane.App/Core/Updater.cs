@@ -5,7 +5,7 @@ using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text.Json;
 
-namespace Fences.Core;
+namespace Frostpane.Core;
 
 /// <summary>A newer release than the one running.</summary>
 internal sealed record Update(Version Version, string InstallerUrl, string Notes);
@@ -20,7 +20,7 @@ internal sealed record Update(Version Version, string InstallerUrl, string Notes
 /// </summary>
 internal static class Updater
 {
-    private const string LatestRelease = "https://api.github.com/repos/limburatorul/Fences/releases/latest";
+    private const string LatestRelease = "https://api.github.com/repos/limburatorul/Frostpane/releases/latest";
 
     public static Version Current { get; } =
         Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0);
@@ -29,7 +29,7 @@ internal static class Updater
     /// GitHub rejects API requests that do not identify themselves. Declared after
     /// <see cref="Current"/> because static initialisers run in declaration order.
     /// </summary>
-    private static readonly ProductInfoHeaderValue Agent = new("Fences", Current.ToString(3));
+    private static readonly ProductInfoHeaderValue Agent = new("Frostpane", Current.ToString(3));
 
     /// <summary>Compares on major.minor.patch only; the assembly's fourth component is noise.</summary>
     private static Version Release(Version version) =>
@@ -74,7 +74,7 @@ internal static class Updater
     /// </summary>
     public static async Task<bool> InstallAsync(Update update, CancellationToken cancellation = default)
     {
-        string path = Path.Combine(Path.GetTempPath(), $"Fences-{update.Version}-setup.exe");
+        string path = Path.Combine(Path.GetTempPath(), $"Frostpane-{update.Version}-setup.exe");
 
         try
         {

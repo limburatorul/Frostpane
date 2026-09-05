@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Fences.Interop;
+namespace Frostpane.Interop;
 
 [StructLayout(LayoutKind.Sequential)]
 internal struct SampleDesc
