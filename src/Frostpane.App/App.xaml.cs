@@ -121,13 +121,18 @@ public partial class App : Application
     {
         if (args.Contains("--new-pane")) return ShellCommand.NewPane;
         if (args.Contains("--new-portal")) return ShellCommand.NewPortal;
+        if (args.Contains("--settings")) return ShellCommand.Settings;
         return null;
     }
 
     private void Run(ShellCommand command)
     {
-        if (command == ShellCommand.NewPane) NewPaneAtCursor();
-        else NewPortalAtCursor();
+        switch (command)
+        {
+            case ShellCommand.NewPane: NewPaneAtCursor(); break;
+            case ShellCommand.NewPortal: NewPortalAtCursor(); break;
+            default: ShowSettings(); break;
+        }
     }
 
     private void NewPaneAtCursor() =>
@@ -206,7 +211,8 @@ public partial class App : Application
             return;
         }
 
-        _settingsWindow = new SettingsWindow(_manager!.Settings, () => _manager!.ApplySettings());
+        _settingsWindow = new SettingsWindow(_manager!.Settings, () => _manager!.ApplySettings(),
+                                            () => _manager!.BlurStatus);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();   // the app is never foreground, so Show alone leaves it behind

@@ -50,25 +50,101 @@ internal sealed class PaneManager : IDisposable
         {
             Interval = TimeSpan.FromMilliseconds(700),
         };
-        _timer.Tick += (_, _) => Reconcile();
+        _timer.Tick += (_, _) => { Reconcile(); CheckCaptureAlive(); };
         _timer.Start();
 
         StartCapture();
         Reconcile();
     }
 
+    /// <summary>What the blur is currently doing, for the settings window to report.</summary>
+    public string BlurStatus { get; private set; } = "starting…";
+
+    private DateTime _lastCaptureRestart = DateTime.MinValue;
+
     private void StartCapture()
     {
+        StopCapture();
+        _lastCaptureRestart = DateTime.UtcNow;
+
+        if (!_layout.Settings.BlurWallpaper)
+        {
+            BlurStatus = "off";
+            return;
+        }
+
         try
         {
-            _capture = new WallpaperCapture(_layer.IconHost);
+            _capture = new WallpaperCapture(_layer.IconHost)
+            {
+                Softness = _layout.Settings.BlurSoftness,
+                Brightness = _layout.Settings.BlurBrightness,
+            };
             _capture.FrameReady += OnWallpaperFrame;
+            _capture.Stopped += () => _dispatcher.BeginInvoke(StartCapture);
+            BlurStatus = "starting…";
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // No capture means no blur; the panes stay plainly translucent, which still works.
             _capture = null;
+            BlurStatus = "unavailable — " + ex.Message;
         }
+    }
+
+    private void StopCapture()
+    {
+        if (_capture is null) return;
+
+        _capture.FrameReady -= OnWallpaperFrame;
+        _capture.Dispose();
+        _capture = null;
+
+        _wallpaper = null;
+        foreach (var window in _windows.Values) window.SetBackdrop(null);
+    }
+
+    /// <summary>
+    /// Rebuilds the capture when it stops delivering.
+    ///
+    /// The capture is bound to the desktop window that existed when it started. That window can be
+    /// replaced without Explorer restarting — switching or restarting a wallpaper engine does it —
+    /// and the capture then goes quiet for good, leaving panes with no backdrop and nothing to
+    /// show for it.
+    /// </summary>
+    private void CheckCaptureAlive()
+    {
+        if (!_layout.Settings.BlurWallpaper) return;
+
+        if (_capture is null)
+        {
+            StartCapture();
+            return;
+        }
+
+        if (_capture.LastError is { } error)
+        {
+            BlurStatus = "failing — " + error;
+            return;
+        }
+
+        var idle = DateTime.UtcNow - _capture.LastProcessed;
+        if (idle < TimeSpan.FromSeconds(15))
+        {
+            BlurStatus = idle < TimeSpan.FromSeconds(2) ? "active" : "idle";
+            return;
+        }
+
+        // Frames also stop when nothing is repainting the desktop — a wallpaper engine paused
+        // behind a full-screen game, say — so rebuild sparingly rather than every few seconds.
+        if (DateTime.UtcNow - _lastCaptureRestart < TimeSpan.FromSeconds(30))
+        {
+            BlurStatus = "idle";
+            return;
+        }
+
+        BlurStatus = "restarting…";
+        StartCapture();
     }
 
     /// <summary>
@@ -149,6 +225,18 @@ internal sealed class PaneManager : IDisposable
     public void ApplySettings()
     {
         foreach (var window in _windows.Values) window.ApplyAppearance(_layout.Settings);
+
+        bool running = _capture is not null;
+        if (_layout.Settings.BlurWallpaper != running)
+        {
+            StartCapture();
+        }
+        else if (_capture is not null)
+        {
+            _capture.Softness = _layout.Settings.BlurSoftness;
+            _capture.Brightness = _layout.Settings.BlurBrightness;
+        }
+
         foreach (var pane in _layout.Panes) ApplyBackdrop(pane);
         Save();
     }
@@ -601,7 +689,7 @@ internal sealed class PaneManager : IDisposable
     public void Dispose()
     {
         _timer.Stop();
-        _capture?.Dispose();
+        StopCapture();
         foreach (var window in _windows.Values) window.Close();
         _windows.Clear();
     }

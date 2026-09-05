@@ -3,7 +3,7 @@ using Frostpane.Interop;
 
 namespace Frostpane.Core;
 
-internal enum ShellCommand { NewPane, NewPortal }
+internal enum ShellCommand { NewPane, NewPortal, Settings }
 
 /// <summary>
 /// The app's hidden top-level window: it carries desktop-menu commands to the copy that is already
@@ -31,6 +31,7 @@ internal sealed class CommandChannel : IDisposable
     private const int WM_APP = 0x8000;
     private const int NewPaneMessage = WM_APP + 1;
     private const int NewPortalMessage = WM_APP + 2;
+    private const int SettingsMessage = WM_APP + 3;
 
     private readonly HwndSource _source;
 
@@ -68,6 +69,11 @@ internal sealed class CommandChannel : IDisposable
                 Received?.Invoke(ShellCommand.NewPortal);
                 return IntPtr.Zero;
 
+            case SettingsMessage:
+                handled = true;
+                Received?.Invoke(ShellCommand.Settings);
+                return IntPtr.Zero;
+
             case WM_QUERYENDSESSION:
                 // TRUE means "nothing unsaved, go ahead"; WM_ENDSESSION then follows.
                 handled = true;
@@ -89,7 +95,12 @@ internal sealed class CommandChannel : IDisposable
         IntPtr target = Win32.FindWindow(null, WindowName);
         if (target == IntPtr.Zero) return false;
 
-        int message = command == ShellCommand.NewPane ? NewPaneMessage : NewPortalMessage;
+        int message = command switch
+        {
+            ShellCommand.NewPane => NewPaneMessage,
+            ShellCommand.NewPortal => NewPortalMessage,
+            _ => SettingsMessage,
+        };
         return Win32.PostMessage(target, message, IntPtr.Zero, IntPtr.Zero);
     }
 

@@ -33,6 +33,10 @@ Pentru executabil și installer (necesită [Inno Setup 6](https://jrsoftware.org
 powershell -File build.ps1
 ```
 
+Aplicația acceptă și câteva comenzi, folosite de intrările din meniul desktopului și utile pe o
+scurtătură: `--new-pane`, `--new-portal`, `--settings`. Dacă aplicația rulează deja, comanda e
+predată instanței pornite.
+
 Rezultatul ajunge în `dist/`. Versiunea se schimbă într-un singur loc, `<Version>` din
 `src/Frostpane.App/Frostpane.App.csproj`; scriptul o citește de acolo și o pune peste tot.
 
@@ -44,14 +48,30 @@ Rezultatul ajunge în `dist/`. Versiunea se schimbă într-un singur loc, `<Vers
 | **Pliere** | Dublu-click pe bară pliază și depliază, animat. Dublu-click pe **nume** redenumește. |
 | **Lipire de margine** | Tras pe marginea de sus sau de jos a ecranului, panoul se lipește și se pliază singur. Tras înapoi, se depliază. |
 | **Peek la hover** | Cu mouse-ul pe un panou pliat, acesta se deschide cât stai pe el; se închide la loc când pleci. |
-| **Setări** | Blur pornit/oprit, opacitatea fundalului, intensitatea și culoarea tentei, mărimea iconițelor, peek, pornire la logon. Din tray sau din click dreapta pe panou. |
+| **Setări** | Blur pornit/oprit, moliciunea și luminozitatea blur-ului, opacitatea fundalului, intensitatea și culoarea tentei, mărimea iconițelor, peek, pornire la logon. Din tray sau din click dreapta pe panou. |
 | **Adopție** | Orice iconiță pe care o tragi pe desktop peste un panou intră în el. Shell-ul o mută, noi o revendicăm. |
 | **Lansare** | Dublu-click pe o iconiță dintr-un panou o deschide, cu verbul implicit al shell-ului. |
 | **Meniu contextual** | Click dreapta pe o iconiță: Deschide / Redenumește / Șterge / Proprietăți — dialogurile reale ale Windows-ului. |
 | **Portal** | Un panou care oglindește un folder de pe disc, cu miniaturi reale, actualizat automat. |
-| **Blur** | Fundalul fiecărui panou e o probă blurată a wallpaper-ului, actualizată ~10 ori pe secundă. Pe un wallpaper aproape negru proba iese tot neagră, așa că opacitatea fundalului e reglabilă: sub 100% se vede wallpaper-ul viu prin panou. |
+| **Blur** | Fundalul fiecărui panou e o probă blurată a wallpaper-ului, actualizată ~10 ori pe secundă. |
 | **Meniu pe desktop** | Click dreapta pe desktop → **Panou nou aici** / **Portal nou aici**. Pe Windows 11 sunt sub „Show more options" (sau direct la Shift+click dreapta): meniul compact acceptă doar handler-e din pachete MSIX semnate. |
 | **Persistență** | `%APPDATA%\Frostpane\layout.json`. |
+
+## Blur-ul pe un wallpaper întunecat
+
+O probă blurată a unui wallpaper aproape negru este ea însăși aproape neagră, deci invizibilă — iar
+panoul arată ca o cutie. Nu e o defecțiune, e aritmetică: media pe blocuri a unor glife rare și
+subțiri dă negru. Windows rezolvă asta în acrylic printr-un „luminosity blend", care ridică proba
+înainte de a o afișa.
+
+Frostpane face la fel, cu două reglaje:
+
+- **Blur brightness** ridică proba spre alb, proporțional cu cât de întunecat e fiecare pixel, deci
+  luminile rămân neatinse. Ăsta e reglajul care transformă cutia neagră în sticlă mată.
+- **Background opacity** sub 100% lasă wallpaper-ul viu, neblurat, să treacă prin panou. E un efect
+  diferit: nu sticlă mată, ci geam.
+
+Implicit: opacitate 100, luminozitate 24, moliciune 4 — sticlă mată.
 
 ## Cum e construit
 
@@ -90,6 +110,12 @@ propriul lor fundal. Cadrul e redus pe GPU prin mip-mapping (nivelul 4, adică 1
 ~53 KB, trecut printr-un box blur separabil și decupat per panou. După implementare, **2340 din 3344
 de pixeli** se schimbă în 800 ms: blur real, pe conținut animat.
 Vezi [`WallpaperCapture`](src/Frostpane.App/Desktop/WallpaperCapture.cs).
+
+Captura e legată de fereastra desktopului care exista când a pornit, iar acea fereastră poate fi
+înlocuită fără ca Explorer să repornească — o schimbare de motor de wallpaper o face. De aceea
+există o supraveghere care o reconstruiește când nu mai livrează cadre, cu pauză între încercări:
+cadrele se opresc și când nimic nu redesenează desktopul, de pildă un wallpaper animat pus pe pauză
+în spatele unui joc pe tot ecranul. Starea capturii se vede în fereastra de setări.
 
 Direct3D e apelat prin vtable, nu prin RCW-uri: dispozitivul se creează pe firul UI dar cadrele
 sosesc pe fir MTA, iar obiectele D3D11 nu se marshalează între apartamente COM — orice apel din

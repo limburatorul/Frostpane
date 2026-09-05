@@ -13,13 +13,22 @@ internal sealed class Settings
     public bool BlurWallpaper { get; set; } = true;
 
     /// <summary>Opacity of a pane's whole background, 20–100. Contents stay fully opaque.</summary>
-    public int BackgroundOpacity { get; set; } = 82;
+    public int BackgroundOpacity { get; set; } = 100;
 
     /// <summary>How strongly <see cref="TintColor"/> covers the backdrop, 0–90.</summary>
-    public int TintStrength { get; set; } = 45;
+    public int TintStrength { get; set; } = 30;
 
     /// <summary>Tint applied over the backdrop, as #RRGGBB.</summary>
     public string TintColor { get; set; } = "#141419";
+
+    /// <summary>How far the wallpaper sample is smeared, 1–10.</summary>
+    public int BlurSoftness { get; set; } = 4;
+
+    /// <summary>
+    /// Lifts the blurred sample towards white, 0–80. A dark wallpaper blurs to near black, and a
+    /// black backdrop reads as a solid box rather than glass; this is what pulls it back.
+    /// </summary>
+    public int BlurBrightness { get; set; } = 24;
 
     /// <summary>Unroll a rolled-up pane while the pointer rests on it, then roll it back.</summary>
     public bool PeekOnHover { get; set; } = true;

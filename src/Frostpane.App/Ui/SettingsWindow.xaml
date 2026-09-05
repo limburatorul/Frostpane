@@ -37,7 +37,34 @@
     <StackPanel Margin="20">
         <TextBlock Text="Appearance" Style="{StaticResource Heading}" />
 
-        <CheckBox x:Name="BlurBox" Content="Blur the wallpaper behind panes" />
+        <CheckBox x:Name="BlurBox" Content="Blur the wallpaper behind panes" Margin="0,0,0,2" />
+        <TextBlock x:Name="BlurStatusText" Foreground="#8A93A6" FontSize="11" Margin="22,0,0,10" />
+
+        <Grid Style="{StaticResource Row}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="46" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Blur softness" VerticalAlignment="Center" />
+            <Slider x:Name="SoftnessSlider" Grid.Column="1" Minimum="1" Maximum="10"
+                    TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
+                       Text="{Binding Value, ElementName=SoftnessSlider, StringFormat={}{0:0}}" />
+        </Grid>
+
+        <Grid Style="{StaticResource Row}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="46" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Blur brightness" VerticalAlignment="Center" />
+            <Slider x:Name="BrightnessSlider" Grid.Column="1" Minimum="0" Maximum="80"
+                    TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
+                       Text="{Binding Value, ElementName=BrightnessSlider, StringFormat={}{0:0}%}" />
+        </Grid>
 
         <Grid Style="{StaticResource Row}">
             <Grid.ColumnDefinitions>
@@ -96,7 +123,7 @@
         <CheckBox x:Name="AutostartBox" Content="Start with Windows" />
 
         <TextBlock TextWrapping="Wrap" Foreground="#9A9AA6" FontSize="11" Margin="0,4,0,0"
-                   Text="A blurred sample of a nearly black wallpaper is itself nearly black. Lower the background opacity to let the live wallpaper show through instead." />
+                   Text="A blurred sample of a nearly black wallpaper is itself nearly black. Raise the blur brightness to lift it, or lower the background opacity to let the live wallpaper show through instead." />
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
             <Button x:Name="ResetButton" Content="Reset" Width="90" Height="28" Margin="0,0,8,0" />

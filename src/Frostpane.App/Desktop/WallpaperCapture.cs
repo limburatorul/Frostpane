@@ -21,8 +21,11 @@ internal sealed record WallpaperFrame(byte[] Pixels, int Width, int Height, int 
 /// </summary>
 internal sealed class WallpaperCapture : IDisposable
 {
-    /// <summary>Mip level the frame is read back from: each level halves both dimensions.</summary>
-    private const int Reduction = 4;
+    /// <summary>
+    /// Mip level the frame is read back from: each level halves both dimensions. Level 3 keeps
+    /// enough structure for the blur to look like glass rather than a flat wash.
+    /// </summary>
+    private const int Reduction = 3;
 
     private static readonly TimeSpan MinInterval = TimeSpan.FromMilliseconds(100);
 
@@ -36,6 +39,24 @@ internal sealed class WallpaperCapture : IDisposable
     private IntPtr _mipTexture, _mipView, _staging;
     private int _stagingWidth, _stagingHeight;
     private DateTime _lastFrame = DateTime.MinValue;
+
+    /// <summary>
+    /// When a frame was last turned into a usable sample. Deliberately not the arrival time: a
+    /// frame that arrives and then fails to process would otherwise look like a healthy capture.
+    /// </summary>
+    public DateTime LastProcessed { get; private set; } = DateTime.MinValue;
+
+    /// <summary>Why processing last failed, if it did.</summary>
+    public string? LastError { get; private set; }
+
+    /// <summary>Blur radius, in pixels of the reduced image.</summary>
+    public int Softness { get; set; } = 3;
+
+    /// <summary>How far the sample is lifted towards white, 0–80.</summary>
+    public int Brightness { get; set; } = 12;
+
+    /// <summary>Raised when the captured window goes away, so the capture has to be rebuilt.</summary>
+    public event Action? Stopped;
     private bool _disposed;
 
     public event Action<WallpaperFrame>? FrameReady;
@@ -54,6 +75,7 @@ internal sealed class WallpaperCapture : IDisposable
         _session = _framePool.CreateCaptureSession(_item);
         TrySilenceCaptureChrome(_session);
 
+        _item.Closed += (_, _) => Stopped?.Invoke();
         _framePool.FrameArrived += OnFrameArrived;
         _session.StartCapture();
     }
@@ -124,9 +146,10 @@ internal sealed class WallpaperCapture : IDisposable
             try { Reduce(texture, frame.ContentSize.Width, frame.ContentSize.Height); }
             finally { Marshal.Release(texture); }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // A display change tears down the capture surfaces; the next frame rebuilds them.
+            LastError = ex.Message;
             ReleaseTextures();
         }
     }
@@ -168,7 +191,10 @@ internal sealed class WallpaperCapture : IDisposable
             for (int row = 0; row < smallHeight; row++)
                 Marshal.Copy(mapped.Data + row * (int)mapped.RowPitch, pixels, row * smallWidth * 4, smallWidth * 4);
 
-            Blur(pixels, smallWidth, smallHeight);
+            Blur(pixels, smallWidth, smallHeight, Math.Clamp(Softness, 1, 10), Math.Clamp(Brightness, 0, 80));
+
+            LastProcessed = DateTime.UtcNow;
+            LastError = null;
             FrameReady?.Invoke(new WallpaperFrame(pixels, smallWidth, smallHeight, width, height));
         }
         finally { D3D11.Unmap(_context, _staging, 0); }
@@ -216,17 +242,27 @@ internal sealed class WallpaperCapture : IDisposable
     /// A separable box blur over the already-reduced image. Mip-mapping alone leaves visible
     /// blocks once the result is stretched back up; two cheap passes turn them into frosted glass.
     /// </summary>
-    private static void Blur(byte[] pixels, int width, int height)
+    private static void Blur(byte[] pixels, int width, int height, int radius, int brightness)
     {
-        const int radius = 2;
         var scratch = new byte[pixels.Length];
 
         BlurPass(pixels, scratch, width, height, radius, horizontal: true);
         BlurPass(scratch, pixels, width, height, radius, horizontal: false);
 
         // Progman does not write a meaningful alpha channel, so make the sample fully opaque.
-        for (int i = 3; i < pixels.Length; i += 4) pixels[i] = 255;
+        // The lift is proportional to how dark a pixel is, so highlights are left alone.
+        double lift = brightness / 100.0;
+        for (int i = 0; i < pixels.Length; i += 4)
+        {
+            pixels[i] = Lift(pixels[i], lift);
+            pixels[i + 1] = Lift(pixels[i + 1], lift);
+            pixels[i + 2] = Lift(pixels[i + 2], lift);
+            pixels[i + 3] = 255;
+        }
     }
+
+    private static byte Lift(byte value, double amount) =>
+        (byte)Math.Clamp(value + (255 - value) * amount, 0, 255);
 
     private static void BlurPass(byte[] source, byte[] target, int width, int height, int radius, bool horizontal)
     {

@@ -16,15 +16,27 @@ public partial class SettingsWindow : Window
 
     private readonly Settings _settings;
     private readonly Action _changed;
+    private readonly Func<string> _blurStatus;
+    private readonly System.Windows.Threading.DispatcherTimer _statusTimer;
 
     private bool _loading = true;
 
-    internal SettingsWindow(Settings settings, Action changed)
+    internal SettingsWindow(Settings settings, Action changed, Func<string> blurStatus)
     {
         InitializeComponent();
 
         _settings = settings;
         _changed = changed;
+        _blurStatus = blurStatus;
+
+        _statusTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(700),
+        };
+        _statusTimer.Tick += (_, _) => BlurStatusText.Text = "Wallpaper capture: " + _blurStatus();
+        _statusTimer.Start();
+        BlurStatusText.Text = "Wallpaper capture: " + _blurStatus();
+        Closed += (_, _) => _statusTimer.Stop();
 
         Load();
         _loading = false;
@@ -33,6 +45,8 @@ public partial class SettingsWindow : Window
         PeekBox.Unchecked += (_, _) => Apply();
         BlurBox.Checked += (_, _) => Apply();
         BlurBox.Unchecked += (_, _) => Apply();
+        SoftnessSlider.ValueChanged += (_, _) => Apply();
+        BrightnessSlider.ValueChanged += (_, _) => Apply();
         OpacitySlider.ValueChanged += (_, _) => Apply();
         TintSlider.ValueChanged += (_, _) => Apply();
         IconSlider.ValueChanged += (_, _) => Apply();
@@ -51,6 +65,8 @@ public partial class SettingsWindow : Window
     {
         BlurBox.IsChecked = _settings.BlurWallpaper;
         PeekBox.IsChecked = _settings.PeekOnHover;
+        SoftnessSlider.Value = _settings.BlurSoftness;
+        BrightnessSlider.Value = _settings.BlurBrightness;
         OpacitySlider.Value = _settings.BackgroundOpacity;
         TintSlider.Value = _settings.TintStrength;
         IconSlider.Value = _settings.IconSize;
@@ -70,6 +86,8 @@ public partial class SettingsWindow : Window
 
         _settings.BlurWallpaper = BlurBox.IsChecked == true;
         _settings.PeekOnHover = PeekBox.IsChecked == true;
+        _settings.BlurSoftness = (int)SoftnessSlider.Value;
+        _settings.BlurBrightness = (int)BrightnessSlider.Value;
         _settings.BackgroundOpacity = (int)OpacitySlider.Value;
         _settings.TintStrength = (int)TintSlider.Value;
         _settings.IconSize = (int)IconSlider.Value;
@@ -87,6 +105,8 @@ public partial class SettingsWindow : Window
         _loading = true;
         BlurBox.IsChecked = defaults.BlurWallpaper;
         PeekBox.IsChecked = defaults.PeekOnHover;
+        SoftnessSlider.Value = defaults.BlurSoftness;
+        BrightnessSlider.Value = defaults.BlurBrightness;
         OpacitySlider.Value = defaults.BackgroundOpacity;
         TintSlider.Value = defaults.TintStrength;
         IconSlider.Value = defaults.IconSize;
