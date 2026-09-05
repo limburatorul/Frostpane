@@ -16,7 +16,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>app.ico</ApplicationIcon>
 
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <Product>Fences</Product>
     <AssemblyTitle>Fences</AssemblyTitle>
     <Description>Fence-uri pe desktop, cu blur pe wallpaper animat</Description>

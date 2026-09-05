@@ -35,6 +35,12 @@ internal sealed class Fence
 internal sealed class Layout
 {
     public List<Fence> Fences { get; set; } = new();
+
+    /// <summary>
+    /// A release the user chose not to install. Kept here rather than in a settings file of its
+    /// own because it is the only preference the app has that the installer must not reset.
+    /// </summary>
+    public string? SkippedUpdate { get; set; }
 }
 
 /// <summary>Reads and writes the fence layout under %APPDATA%\Fences.</summary>

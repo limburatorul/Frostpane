@@ -138,6 +138,13 @@ internal sealed class FenceManager : IDisposable
         window.SetBackdrop(crop);
     }
 
+    /// <summary>The release the user declined, so the app stops offering it.</summary>
+    public string? SkippedUpdate
+    {
+        get => _layout.SkippedUpdate;
+        set { _layout.SkippedUpdate = value; Save(); }
+    }
+
     /// <summary>Raised when a fence is right-clicked, with the screen point and the tile under it.</summary>
     public event Action<Fence, IconTile?, POINT>? ContextMenuRequested;
 

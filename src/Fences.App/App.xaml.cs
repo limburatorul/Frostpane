@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Forms;
+using System.Windows.Threading;
 using Fences.Core;
 using Fences.Desktop;
 using Fences.Interop;
@@ -16,6 +17,7 @@ public partial class App : Application
     private FenceManager? _manager;
     private NotifyIcon? _tray;
     private ToolStripItem? _updateItem;
+    private DispatcherTimer? _updateTimer;
     private Update? _pending;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -41,9 +43,15 @@ public partial class App : Application
             Visible = true,
             ContextMenuStrip = BuildTrayMenu(),
         };
-        _tray.BalloonTipClicked += (_, _) => InstallPendingUpdate();
-
         _ = CheckForUpdatesAsync(announce: false);
+
+        // A copy left running for days would otherwise never notice a release.
+        _updateTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromHours(6),
+        };
+        _updateTimer.Tick += (_, _) => _ = CheckForUpdatesAsync(announce: false);
+        _updateTimer.Start();
     }
 
     /// <summary>The icon compiled into the executable, so no separate file has to ship beside it.</summary>
@@ -77,7 +85,7 @@ public partial class App : Application
 
         _updateItem = menu.Items.Add("Verifică actualizări", null, (_, _) =>
         {
-            if (_pending is not null) InstallPendingUpdate();
+            if (_pending is not null) OfferPendingUpdate();
             else _ = CheckForUpdatesAsync(announce: true);
         });
 
@@ -141,25 +149,32 @@ public partial class App : Application
             return;
         }
 
-        _pending = update;
-        if (_updateItem is not null) _updateItem.Text = $"Instalează versiunea {update.Version.ToString(3)}";
+        string label = update.Version.ToString(3);
 
-        if (announce) InstallPendingUpdate();
-        else _tray?.ShowBalloonTip(8000, "Fences",
-                                   $"Versiunea {update.Version.ToString(3)} e disponibilă. Click aici ca s-o instalezi.",
-                                   ToolTipIcon.Info);
+        _pending = update;
+        if (_updateItem is not null) _updateItem.Text = $"Instalează versiunea {label}";
+        if (_tray is not null) _tray.Text = $"Fences {Updater.Current.ToString(3)} — {label} disponibilă";
+
+        // A tray balloon goes through the Windows notification centre, where it is routinely
+        // suppressed, so the offer has to be a dialog. Declining silences that one version.
+        if (announce || _manager?.SkippedUpdate != label) OfferPendingUpdate();
     }
 
-    private void InstallPendingUpdate()
+    private void OfferPendingUpdate()
     {
         if (_pending is not { } update) return;
+        string label = update.Version.ToString(3);
 
-        var answer = MessageBox.Show($"Versiunea {update.Version.ToString(3)} e disponibilă " +
-                                     $"(ai {Updater.Current.ToString(3)}).\n\n" +
+        var answer = MessageBox.Show($"Versiunea {label} e disponibilă (ai {Updater.Current.ToString(3)}).\n\n" +
                                      "O instalez acum? Aplicația se va reporni singură.",
                                      "Fences", MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (answer != MessageBoxResult.Yes) return;
+        if (answer != MessageBoxResult.Yes)
+        {
+            if (_manager is not null) _manager.SkippedUpdate = label;
+            return;
+        }
 
+        if (_manager is not null) _manager.SkippedUpdate = null;
         _ = InstallAsync(update);
     }
 
