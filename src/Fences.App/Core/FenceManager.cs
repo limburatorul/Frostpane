@@ -34,7 +34,7 @@ internal sealed class FenceManager : IDisposable
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
 
     private readonly Layout _layout;
-    private readonly WallpaperCapture? _capture;
+    private WallpaperCapture? _capture;
     private BitmapSource? _wallpaper;
 
     public FenceManager(DesktopLayer layer)
@@ -53,9 +53,15 @@ internal sealed class FenceManager : IDisposable
         _timer.Tick += (_, _) => Reconcile();
         _timer.Start();
 
+        StartCapture();
+        Reconcile();
+    }
+
+    private void StartCapture()
+    {
         try
         {
-            _capture = new WallpaperCapture(layer.IconHost);
+            _capture = new WallpaperCapture(_layer.IconHost);
             _capture.FrameReady += OnWallpaperFrame;
         }
         catch (Exception)
@@ -63,8 +69,32 @@ internal sealed class FenceManager : IDisposable
             // No capture means no blur; the fences stay plainly translucent, which still works.
             _capture = null;
         }
+    }
 
-        Reconcile();
+    /// <summary>
+    /// Rebuilds everything that was tied to the old shell process. Explorer can restart at any
+    /// time — a crash, a settings change — taking its desktop window, its shell view and the
+    /// capture bound to that window with it.
+    /// </summary>
+    private void RecoverFromShellRestart()
+    {
+        _layer.Refresh();
+        if (!_layer.IsValid) return;
+
+        _icons.Invalidate();
+        _icons.AllowFreePositioning();
+
+        if (_capture is not null)
+        {
+            _capture.FrameReady -= OnWallpaperFrame;
+            _capture.Dispose();
+            _capture = null;
+        }
+        StartCapture();
+
+        foreach (var fence in _layout.Fences)
+            if (_windows.TryGetValue(fence.Id, out var window))
+                Place(fence, window);
     }
 
     // ---------- blurred backdrop ----------
@@ -302,6 +332,8 @@ internal sealed class FenceManager : IDisposable
     /// </summary>
     public void Reconcile()
     {
+        if (!_layer.IsValid) RecoverFromShellRestart();
+
         var icons = _icons.Snapshot();
         if (icons.Count == 0 && _layout.Fences.Count == 0) return;
 

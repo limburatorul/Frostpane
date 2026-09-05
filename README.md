@@ -103,6 +103,8 @@ Trei plase de siguranță:
   Explorer-ului (fără intrările adăugate de aplicații terțe).
 - Aplicația nu e semnată digital, deci SmartScreen va avertiza la prima rulare a installer-ului
   („Windows protected your PC" → *More info* → *Run anyway").
+- Consumă în jur de 260 MB memorie privată, stabil: captura de wallpaper ține o textură cât întreg
+  desktopul virtual. Fără blur ar fi o fracțiune din asta.
 
 ## tools/DesktopProbe
 
