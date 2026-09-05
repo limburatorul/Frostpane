@@ -1,0 +1,115 @@
+# Fences
+
+Un clonă de Stardock Fences pentru Windows 11: zone dreptunghiulare pe desktop care adună
+iconițele, se mută, se redimensionează, se pliază la dublu-click pe titlu și își amintesc
+aranjamentul între sesiuni. În plus față de originalul Stardock, **blurează și un wallpaper
+animat** în spatele lor.
+
+## Instalare
+
+Descarcă `Fences-x.y.z-setup.exe` din [Releases](https://github.com/limburatorul/Fences/releases/latest)
+și rulează-l. Instalarea e per-utilizator, deci nu cere drepturi de administrator, și nu are nevoie
+de niciun runtime instalat separat.
+
+Aplicația pornește fără fereastră proprie: o găsești în tray. Din meniul ei creezi primul fence,
+pornești aplicația odată cu Windows, sau verifici actualizările.
+
+**Actualizare automată.** La pornire, aplicația întreabă GitHub dacă există un release mai nou și,
+dacă da, te anunță printr-o notificare. Accepți, ea descarcă installer-ul, îl rulează silențios și
+repornește singură. Nu e nevoie de cont sau token: repo-ul e public.
+
+## Din surse
+
+```bash
+dotnet run --project "src/Fences.App"
+```
+
+Pentru executabil și installer (necesită [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
+
+```bash
+powershell -File build.ps1
+```
+
+Rezultatul ajunge în `dist/`. Versiunea se schimbă într-un singur loc, `<Version>` din
+`src/Fences.App/Fences.App.csproj`; scriptul o citește de acolo și o pune peste tot.
+
+## Ce face
+
+| | |
+|---|---|
+| **Fence** | Dreptunghi translucid cu titlu. Trage de titlu ca să-l muți, de margini ca să-l redimensionezi, dublu-click pe titlu ca să-l pliezi. |
+| **Adopție** | Orice iconiță pe care o tragi pe desktop peste un fence intră în el. Shell-ul o mută, noi o revendicăm. |
+| **Lansare** | Dublu-click pe o iconiță din fence o deschide, cu verbul implicit al shell-ului. |
+| **Meniu contextual** | Click dreapta pe o iconiță: Deschide / Redenumește / Șterge / Proprietăți — dialogurile reale ale Windows-ului. |
+| **Portal** | Un fence care oglindește un folder de pe disc, cu miniaturi reale, actualizat automat. |
+| **Blur** | Fundalul fiecărui fence e o probă blurată a wallpaper-ului, actualizată ~10 ori pe secundă. |
+| **Persistență** | `%APPDATA%\Fences\layout.json`. |
+
+## Cum e construit
+
+Trei probleme au dictat arhitectura, în ordinea în care au apărut.
+
+**1. Cine mută iconițele.** Pozițiile iconițelor de desktop se citesc și se scriu prin
+`IFolderView2`, obținut din vederea activă a desktopului Explorer-ului (`IShellWindows` →
+`SWC_DESKTOP` → `IShellBrowser` → `QueryActiveShellView`). E o interfață COM documentată,
+cross-process: nu se scrie memorie în `explorer.exe` și nu se injectează nimic.
+Vezi [`DesktopIcons`](src/Fences.App/Desktop/DesktopIcons.cs).
+
+**2. Unde se desenează fence-ul.** Prima variantă — fidelă originalului — punea fence-ul ca
+fereastră-copil în ierarhia desktopului, sub `SysListView32`, ca iconițele native ale
+Explorer-ului să rămână deasupra. Merge, dar **nu cât timp rulează un wallpaper compus pe GPU**
+(Wallpaper Engine și similare): am testat parentare în `Progman`, în `SHELLDLL_DefView` și în
+`WorkerW`-ul wallpaper-ului, cu fereastră WPF cu transparență per-pixel, WPF opacă și GDI pură —
+niciuna nu apare pe ecran. Aceeași fereastră, top-level, se vede impecabil.
+
+Deci fence-urile sunt **ferestre top-level**, fixate pe ultima poziție în Z (`WM_WINDOWPOSCHANGING`
+rescrie fiecare schimbare de Z în `HWND_BOTTOM`) și fără activare (`WS_EX_NOACTIVATE`), ca un click
+în fence să nu fure focusul. Fiindcă shell-ul nu poate desena peste ele, iconițele revendicate de un
+fence sunt **parcate în afara ecranului** (y = 30000) și redesenate de noi, cu iconițele și
+miniaturile reale obținute prin `IShellItemImageFactory`. Iconițele pe care nu le revendică niciun
+fence rămân în grija shell-ului, exact ca pe un desktop gol.
+
+**3. Blur peste wallpaper animat.** Niciun API de blur al DWM nu vede conținutul Wallpaper Engine:
+nici atributul acrylic din Windows 11 (`DWMWA_SYSTEMBACKDROP_TYPE`), nici vechea politică de accent
+(`SetWindowCompositionAttribute`). Ambele redau o culoare plată — măsurat: **0 din 5225 de pixeli**
+din interiorul unui fence se schimbau în 700 ms, cât timp wallpaper-ul din jur se schimba vizibil.
+Ăsta e exact motivul pentru care Fences de la Stardock blura doar wallpaper static.
+
+Soluția e captură proprie: `Windows.Graphics.Capture` pe fereastra `Progman`, care conține orice
+desenează fundalul. Fence-urile fiind top-level nu fac parte din `Progman`, deci nu apar niciodată
+în propriul lor fundal. Cadrul e redus pe GPU prin mip-mapping (nivelul 4, adică 1/16), citit înapoi
+la ~53 KB, trecut printr-un box blur separabil și decupat per fence.
+Vezi [`WallpaperCapture`](src/Fences.App/Desktop/WallpaperCapture.cs).
+
+Direct3D e apelat prin vtable, nu prin RCW-uri: dispozitivul se creează pe firul UI dar cadrele
+sosesc pe fir MTA, iar obiectele D3D11 nu se marshalează între apartamente COM — orice apel din
+apartamentul greșit eșuează cu `E_NOINTERFACE`.
+
+## Siguranță
+
+Iconițele parcate în afara ecranului ar arăta ca șterse dacă aplicația ar dispărea cu ele acolo.
+Trei plase de siguranță:
+
+- la ieșire, toate iconițele sunt returnate desktopului;
+- la fiecare ciclu, orice iconiță parcată pe care n-o revendică niciun fence e adusă înapoi;
+- meniul din tray are **Eliberează toate iconițele**.
+
+## Limitări cunoscute
+
+- Fence-urile acoperă iconițele native aflate sub ele; în practică nu se vede, fiindcă orice
+  iconiță ajunsă sub un fence e adoptată de el la următorul ciclu.
+- Portalurile sunt doar de citire: din ele nu se poate trage un fișier afară.
+- Meniul contextual e unul propriu, cu verbele shell-ului, nu meniul complet `IContextMenu` al
+  Explorer-ului (fără intrările adăugate de aplicații terțe).
+- Aplicația nu e semnată digital, deci SmartScreen va avertiza la prima rulare a installer-ului
+  („Windows protected your PC" → *More info* → *Run anyway").
+
+## tools/DesktopProbe
+
+Utilitar de diagnostic separat: listează ierarhia de ferestre a desktopului, starea vederii shell,
+și pozițiile iconițelor; `move <index> <x> <y>` mută o iconiță. A fost instrumentul cu care s-au
+validat toate ipotezele de mai sus și rămâne util când ceva se comportă ciudat.
+
+```bash
+dotnet run --project tools/DesktopProbe -- dump
+```

@@ -1,0 +1,188 @@
+using System.Windows;
+using System.Windows.Forms;
+using Fences.Core;
+using Fences.Desktop;
+using Fences.Interop;
+using Fences.Model;
+using Fences.Ui;
+using Application = System.Windows.Application;
+using MessageBox = System.Windows.MessageBox;
+
+namespace Fences;
+
+public partial class App : Application
+{
+    private DesktopLayer? _layer;
+    private FenceManager? _manager;
+    private NotifyIcon? _tray;
+    private ToolStripItem? _updateItem;
+    private Update? _pending;
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+
+        _layer = new DesktopLayer();
+        if (!_layer.IsValid)
+        {
+            MessageBox.Show("Nu am găsit desktopul Explorer-ului (SHELLDLL_DefView).",
+                            "Fences", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+            return;
+        }
+
+        _manager = new FenceManager(_layer);
+        _manager.ContextMenuRequested += ShowFenceMenu;
+
+        _tray = new NotifyIcon
+        {
+            Icon = AppIcon(),
+            Text = $"Fences {Updater.Current.ToString(3)}",
+            Visible = true,
+            ContextMenuStrip = BuildTrayMenu(),
+        };
+        _tray.BalloonTipClicked += (_, _) => InstallPendingUpdate();
+
+        _ = CheckForUpdatesAsync(announce: false);
+    }
+
+    /// <summary>The icon compiled into the executable, so no separate file has to ship beside it.</summary>
+    private static System.Drawing.Icon AppIcon()
+    {
+        try
+        {
+            return System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!)
+                   ?? System.Drawing.SystemIcons.Application;
+        }
+        catch (Exception)
+        {
+            return System.Drawing.SystemIcons.Application;
+        }
+    }
+
+    private ContextMenuStrip BuildTrayMenu()
+    {
+        var menu = new ContextMenuStrip();
+        menu.Items.Add("Fence nou", null, (_, _) => NewFenceAtCursor());
+        menu.Items.Add("Portal nou…", null, (_, _) => NewPortalAtCursor());
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Eliberează toate iconițele", null, (_, _) => _manager!.ReleaseAllIcons());
+        menu.Items.Add(new ToolStripSeparator());
+
+        var startup = new ToolStripMenuItem("Pornește odată cu Windows") { Checked = Autostart.Enabled };
+        startup.Click += (_, _) => startup.Checked = Autostart.Enabled = !Autostart.Enabled;
+        menu.Items.Add(startup);
+
+        menu.Items.Add(new ToolStripSeparator());
+
+        _updateItem = menu.Items.Add("Verifică actualizări", null, (_, _) =>
+        {
+            if (_pending is not null) InstallPendingUpdate();
+            else _ = CheckForUpdatesAsync(announce: true);
+        });
+
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Ieșire", null, (_, _) => Shutdown());
+        return menu;
+    }
+
+    private void NewFenceAtCursor() =>
+        _manager!.Create(_layer!.ScreenToDesktop(Win32.CursorPosition));
+
+    private void NewPortalAtCursor()
+    {
+        using var picker = new FolderBrowserDialog { Description = "Alege folderul oglindit de portal" };
+        if (picker.ShowDialog() != DialogResult.OK) return;
+
+        _manager!.Create(_layer!.ScreenToDesktop(Win32.CursorPosition),
+                         System.IO.Path.GetFileName(picker.SelectedPath.TrimEnd('\\')),
+                         picker.SelectedPath);
+    }
+
+    private void ShowFenceMenu(Fence fence, IconTile? tile, POINT screen)
+    {
+        var menu = new ContextMenuStrip();
+
+        if (tile is not null)
+        {
+            menu.Items.Add("Deschide", null, (_, _) => _manager!.InvokeVerb(fence, tile.Id, null));
+            if (!fence.IsPortal)
+            {
+                menu.Items.Add("Redenumește fișierul…", null, (_, _) => _manager!.InvokeVerb(fence, tile.Id, "rename"));
+                menu.Items.Add("Șterge fișierul", null, (_, _) => _manager!.InvokeVerb(fence, tile.Id, "delete"));
+            }
+            menu.Items.Add("Proprietăți", null, (_, _) => _manager!.InvokeVerb(fence, tile.Id, "properties"));
+            menu.Items.Add(new ToolStripSeparator());
+        }
+
+        menu.Items.Add("Redenumește fence-ul…", null, (_, _) =>
+        {
+            string? name = Prompt.AskText("Redenumește fence-ul", fence.Label);
+            if (!string.IsNullOrWhiteSpace(name)) _manager!.Rename(fence, name);
+        });
+        menu.Items.Add(fence.RolledUp ? "Depliază" : "Pliază", null, (_, _) => _manager!.ToggleRollUp(fence));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Fence nou aici", null, (_, _) => _manager!.Create(_layer!.ScreenToDesktop(screen)));
+        menu.Items.Add("Șterge fence-ul", null, (_, _) => _manager!.Remove(fence));
+
+        menu.Show(new System.Drawing.Point(screen.X, screen.Y));
+    }
+
+    // ---------- updates ----------
+
+    private async Task CheckForUpdatesAsync(bool announce)
+    {
+        var update = await Updater.CheckAsync();
+        if (update is null)
+        {
+            if (announce)
+                MessageBox.Show($"Folosești deja cea mai nouă versiune ({Updater.Current.ToString(3)}).",
+                                "Fences", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        _pending = update;
+        if (_updateItem is not null) _updateItem.Text = $"Instalează versiunea {update.Version.ToString(3)}";
+
+        if (announce) InstallPendingUpdate();
+        else _tray?.ShowBalloonTip(8000, "Fences",
+                                   $"Versiunea {update.Version.ToString(3)} e disponibilă. Click aici ca s-o instalezi.",
+                                   ToolTipIcon.Info);
+    }
+
+    private void InstallPendingUpdate()
+    {
+        if (_pending is not { } update) return;
+
+        var answer = MessageBox.Show($"Versiunea {update.Version.ToString(3)} e disponibilă " +
+                                     $"(ai {Updater.Current.ToString(3)}).\n\n" +
+                                     "O instalez acum? Aplicația se va reporni singură.",
+                                     "Fences", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes) return;
+
+        _ = InstallAsync(update);
+    }
+
+    private async Task InstallAsync(Update update)
+    {
+        if (await Updater.InstallAsync(update))
+        {
+            Shutdown();     // the installer is waiting to replace the files this process is using
+            return;
+        }
+
+        MessageBox.Show("Nu am reușit să descarc actualizarea. Încearcă mai târziu.",
+                        "Fences", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        // Icons left parked off-screen would look to the user as though they had been deleted.
+        _manager?.ReleaseIconsForShutdown();
+        _manager?.Dispose();
+
+        if (_tray is not null) { _tray.Visible = false; _tray.Dispose(); }
+
+        base.OnExit(e);
+    }
+}
