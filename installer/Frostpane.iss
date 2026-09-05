@@ -33,8 +33,9 @@ UninstallDisplayName={#AppName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
-; Frostpane holds its own files open, so let the Restart Manager shut it down first.
-CloseApplications=yes
+; Frostpane keeps its own files open. "force" lets the Restart Manager terminate it when it will
+; not close on request, which builds before 1.0.1 did not.
+CloseApplications=force
 RestartApplications=yes
 
 OutputDir=..\dist
@@ -66,8 +67,50 @@ Filename: "{app}\Frostpane.exe"; Description: "Pornește {#AppName}"; Flags: now
 Type: filesandordirs; Name: "{userappdata}\Frostpane"
 
 [Code]
-{ Autostart and the desktop menu entries are written by the app itself, so the uninstaller,
-  not the installer, is what has to clear them. }
+const
+  WM_CLOSE = $0010;
+
+function PostMessage(Wnd: HWND; Msg: UINT; WParam, LParam: Longint): BOOL;
+  external 'PostMessageW@user32.dll stdcall';
+
+{ Setup cannot replace files the running app holds open, so stop it first. Ask politely, then
+  insist: builds before 1.0.1 have no window that answers a close request. }
+procedure StopFrostpane();
+var
+  Window: HWND;
+  Waited, ResultCode: Integer;
+begin
+  Window := FindWindowByWindowName('Frostpane.Command');
+  if Window <> 0 then
+  begin
+    PostMessage(Window, WM_CLOSE, 0, 0);
+    for Waited := 1 to 40 do
+    begin
+      Sleep(100);
+      if FindWindowByWindowName('Frostpane.Command') = 0 then
+        break;
+    end;
+  end;
+
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM Frostpane.exe', '',
+       SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(500);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  StopFrostpane();
+  Result := '';
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  StopFrostpane();
+  Result := True;
+end;
+
+{ Autostart and the desktop menu entries are written by the app itself, so the uninstaller, not
+  the installer, is what has to clear them. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Roots: array[0..1] of String;
@@ -79,8 +122,8 @@ begin
   RegDeleteValue(HKEY_CURRENT_USER,
                  'Software\Microsoft\Windows\CurrentVersion\Run', 'Frostpane');
 
-  Roots[0] := 'Software\Classes\DesktopBackground\Shell';
-  Roots[1] := 'Software\Classes\Directory\Background\shell';
+  Roots[0] := 'Software\Classes\DesktopBackground\Shell\';
+  Roots[1] := 'Software\Classes\Directory\Background\shell\';
   for I := 0 to 1 do
   begin
     RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, Roots[I] + 'Frostpane.NewPane');

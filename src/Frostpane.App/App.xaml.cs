@@ -53,6 +53,7 @@ public partial class App : Application
         ShellMenu.Register();
         _commands = new CommandChannel();
         _commands.Received += Run;
+        _commands.CloseRequested += () => Dispatcher.BeginInvoke(new Action(Shutdown));
         if (requested is not null) Run(requested.Value);
 
         _tray = new NotifyIcon
