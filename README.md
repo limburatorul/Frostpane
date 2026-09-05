@@ -73,6 +73,9 @@ Frostpane face la fel, cu două reglaje:
 
 Implicit: opacitate 100, luminozitate 24, moliciune 4 — sticlă mată.
 
+**Tenta** e limitată la 60%%, intenționat: o tentă care acoperă proba blurată transformă panoul
+înapoi într-un dreptunghi plat, adică exact problema pe care blur-ul o rezolvă.
+
 ## Cum e construit
 
 Trei probleme au dictat arhitectura, în ordinea în care au apărut.

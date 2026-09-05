@@ -22,7 +22,13 @@
             <Setter Property="Margin" Value="0,0,0,8" />
         </Style>
         <Style x:Key="Row" TargetType="Grid">
-            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Margin" Value="0,0,0,1" />
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#7E7E8C" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,0,0,11" />
         </Style>
         <Style TargetType="CheckBox">
             <Setter Property="Foreground" Value="#F0F0F4" />
@@ -52,6 +58,7 @@
             <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
                        Text="{Binding Value, ElementName=SoftnessSlider, StringFormat={}{0:0}}" />
         </Grid>
+        <TextBlock Style="{StaticResource Hint}" Text="How far the wallpaper sample is smeared." />
 
         <Grid Style="{StaticResource Row}">
             <Grid.ColumnDefinitions>
@@ -65,6 +72,7 @@
             <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
                        Text="{Binding Value, ElementName=BrightnessSlider, StringFormat={}{0:0}%}" />
         </Grid>
+        <TextBlock Style="{StaticResource Hint}" Text="A dark wallpaper blurs to near black, which reads as a solid box. This lifts it until it reads as glass." />
 
         <Grid Style="{StaticResource Row}">
             <Grid.ColumnDefinitions>
@@ -78,6 +86,7 @@
             <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
                        Text="{Binding Value, ElementName=OpacitySlider, StringFormat={}{0:0}%}" />
         </Grid>
+        <TextBlock Style="{StaticResource Hint}" Text="Below 100% the live, unblurred wallpaper shows through the pane. A different effect from frosted glass — a window rather than frost." />
 
         <Grid Style="{StaticResource Row}">
             <Grid.ColumnDefinitions>
@@ -86,11 +95,12 @@
                 <ColumnDefinition Width="46" />
             </Grid.ColumnDefinitions>
             <TextBlock Text="Tint strength" VerticalAlignment="Center" />
-            <Slider x:Name="TintSlider" Grid.Column="1" Minimum="0" Maximum="90"
+            <Slider x:Name="TintSlider" Grid.Column="1" Minimum="0" Maximum="60"
                     TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
             <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
                        Text="{Binding Value, ElementName=TintSlider, StringFormat={}{0:0}%}" />
         </Grid>
+        <TextBlock Style="{StaticResource Hint}" Text="Colour laid over the blurred sample. The more of it, the less of the blur you see." />
 
         <Grid Style="{StaticResource Row}">
             <Grid.ColumnDefinitions>
@@ -121,9 +131,6 @@
         <TextBlock Text="Behaviour" Style="{StaticResource Heading}" Margin="0,10,0,8" />
         <CheckBox x:Name="PeekBox" Content="Open a rolled-up pane while hovering it" />
         <CheckBox x:Name="AutostartBox" Content="Start with Windows" />
-
-        <TextBlock TextWrapping="Wrap" Foreground="#9A9AA6" FontSize="11" Margin="0,4,0,0"
-                   Text="A blurred sample of a nearly black wallpaper is itself nearly black. Raise the blur brightness to lift it, or lower the background opacity to let the live wallpaper show through instead." />
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
             <Button x:Name="ResetButton" Content="Reset" Width="90" Height="28" Margin="0,0,8,0" />

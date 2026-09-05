@@ -15,7 +15,10 @@ internal sealed class Settings
     /// <summary>Opacity of a pane's whole background, 20–100. Contents stay fully opaque.</summary>
     public int BackgroundOpacity { get; set; } = 100;
 
-    /// <summary>How strongly <see cref="TintColor"/> covers the backdrop, 0–90.</summary>
+    /// <summary>
+    /// How strongly <see cref="TintColor"/> covers the backdrop, 0–60. Capped below opaque on
+    /// purpose: a tint that hides the blurred sample turns the pane back into a flat box.
+    /// </summary>
     public int TintStrength { get; set; } = 30;
 
     /// <summary>Tint applied over the backdrop, as #RRGGBB.</summary>

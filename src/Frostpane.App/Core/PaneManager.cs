@@ -92,13 +92,20 @@ internal sealed class PaneManager : IDisposable
         }
     }
 
-    private void StopCapture()
+    /// <summary>
+    /// Tears the capture down. The last sample is kept unless the blur is being switched off:
+    /// dropping it on a restart would blank every pane until a fresh frame arrived.
+    /// </summary>
+    private void StopCapture(bool forgetSample = false)
     {
-        if (_capture is null) return;
+        if (_capture is not null)
+        {
+            _capture.FrameReady -= OnWallpaperFrame;
+            _capture.Dispose();
+            _capture = null;
+        }
 
-        _capture.FrameReady -= OnWallpaperFrame;
-        _capture.Dispose();
-        _capture = null;
+        if (!forgetSample) return;
 
         _wallpaper = null;
         foreach (var window in _windows.Values) window.SetBackdrop(null);
@@ -122,24 +129,19 @@ internal sealed class PaneManager : IDisposable
             return;
         }
 
-        if (_capture.LastError is { } error)
+        if (_capture.LastError is null)
         {
-            BlurStatus = "failing — " + error;
+            // A capture only produces frames when something repaints. A static wallpaper is
+            // therefore silent, and silence must not be mistaken for a broken capture.
+            BlurStatus = DateTime.UtcNow - _capture.LastProcessed < TimeSpan.FromSeconds(2)
+                ? "active"
+                : "idle — the wallpaper is not changing";
             return;
         }
 
-        var idle = DateTime.UtcNow - _capture.LastProcessed;
-        if (idle < TimeSpan.FromSeconds(15))
-        {
-            BlurStatus = idle < TimeSpan.FromSeconds(2) ? "active" : "idle";
-            return;
-        }
-
-        // Frames also stop when nothing is repainting the desktop — a wallpaper engine paused
-        // behind a full-screen game, say — so rebuild sparingly rather than every few seconds.
         if (DateTime.UtcNow - _lastCaptureRestart < TimeSpan.FromSeconds(30))
         {
-            BlurStatus = "idle";
+            BlurStatus = "failing — " + _capture.LastError;
             return;
         }
 
@@ -185,6 +187,7 @@ internal sealed class PaneManager : IDisposable
         image.Freeze();
         _wallpaper = image;
 
+
         _wallpaperSource = new Size(frame.SourceWidth, frame.SourceHeight);
         foreach (var pane in _layout.Panes) ApplyBackdrop(pane);
     }
@@ -216,6 +219,7 @@ internal sealed class PaneManager : IDisposable
         var crop = new CroppedBitmap(_wallpaper, new Int32Rect(x, y, width, height));
         crop.Freeze();
         window.SetBackdrop(crop);
+
     }
 
     /// <summary>Appearance shared by every pane.</summary>
@@ -689,7 +693,7 @@ internal sealed class PaneManager : IDisposable
     public void Dispose()
     {
         _timer.Stop();
-        StopCapture();
+        StopCapture(forgetSample: true);
         foreach (var window in _windows.Values) window.Close();
         _windows.Clear();
     }

@@ -107,8 +107,9 @@ public partial class PaneWindow : Window
     {
         Glass.Opacity = Math.Clamp(settings.BackgroundOpacity, 20, 100) / 100.0;
 
+        // Capped well below opaque: a tint that covers the blurred sample defeats the point.
         var tint = ParseColor(settings.TintColor);
-        tint.A = (byte)Math.Round(Math.Clamp(settings.TintStrength, 0, 90) * 255 / 100.0);
+        tint.A = (byte)Math.Round(Math.Clamp(settings.TintStrength, 0, 60) * 255 / 100.0);
         Tint.Background = new SolidColorBrush(tint);
 
         _blurEnabled = settings.BlurWallpaper;
