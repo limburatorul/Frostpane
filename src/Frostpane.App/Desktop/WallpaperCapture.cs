@@ -56,6 +56,9 @@ internal sealed class WallpaperCapture : IDisposable
     /// <summary>Blur radius, in pixels of the reduced image.</summary>
     public int Softness { get; set; } = 3;
 
+    /// <summary>Colour saturation as a percentage. Above 100 is what makes a blur read as acrylic.</summary>
+    public int Saturation { get; set; } = 100;
+
     /// <summary>How far the sample is lifted towards white, 0–80.</summary>
     public int Brightness { get; set; } = 12;
 
@@ -198,7 +201,8 @@ internal sealed class WallpaperCapture : IDisposable
             sourceHeight = _sourceHeight;
         }
 
-        Blur(pixels, width, height, Math.Clamp(Softness, 1, 10), Math.Clamp(Brightness, 0, 80));
+        Blur(pixels, width, height, Math.Clamp(Softness, 1, 40),
+             Math.Clamp(Saturation, 0, 200), Math.Clamp(Brightness, 0, 80));
 
         LastProcessed = DateTime.UtcNow;
         LastError = null;
@@ -280,57 +284,77 @@ internal sealed class WallpaperCapture : IDisposable
     /// A separable box blur over the already-reduced image. Mip-mapping alone leaves visible
     /// blocks once the result is stretched back up; two cheap passes turn them into frosted glass.
     /// </summary>
-    private static void Blur(byte[] pixels, int width, int height, int radius, int brightness)
+    /// <summary>
+    /// Turns a captured frame into a glass sample: blur, then saturation, then a lift out of black.
+    ///
+    /// Saturation is what separates acrylic from a plain blur — more blur alone just looks fatter.
+    /// </summary>
+    private static void Blur(byte[] pixels, int width, int height, int radius, int saturation, int brightness)
     {
         var scratch = new byte[pixels.Length];
 
         BlurPass(pixels, scratch, width, height, radius, horizontal: true);
         BlurPass(scratch, pixels, width, height, radius, horizontal: false);
 
-        // Progman does not write a meaningful alpha channel, so make the sample fully opaque.
-        // The lift is proportional to how dark a pixel is, so highlights are left alone.
+        double colour = saturation / 100.0;
         double lift = brightness / 100.0;
+
         for (int i = 0; i < pixels.Length; i += 4)
         {
-            pixels[i] = Lift(pixels[i], lift);
-            pixels[i + 1] = Lift(pixels[i + 1], lift);
-            pixels[i + 2] = Lift(pixels[i + 2], lift);
-            pixels[i + 3] = 255;
+            double b = pixels[i], g = pixels[i + 1], r = pixels[i + 2];
+
+            double luma = 0.114 * b + 0.587 * g + 0.299 * r;
+            b = luma + (b - luma) * colour;
+            g = luma + (g - luma) * colour;
+            r = luma + (r - luma) * colour;
+
+            // The lift is proportional to how dark a pixel is, so highlights are left alone.
+            pixels[i] = Clamp(b + (255 - b) * lift);
+            pixels[i + 1] = Clamp(g + (255 - g) * lift);
+            pixels[i + 2] = Clamp(r + (255 - r) * lift);
+            pixels[i + 3] = 255;     // Progman writes no meaningful alpha
         }
     }
 
-    private static byte Lift(byte value, double amount) =>
-        (byte)Math.Clamp(value + (255 - value) * amount, 0, 255);
+    private static byte Clamp(double value) => (byte)Math.Clamp(value, 0, 255);
 
+    /// <summary>
+    /// One axis of a box blur, using a running sum so the cost does not grow with the radius —
+    /// which is what lets a "frosted" preset be three times softer for the same work.
+    /// </summary>
     private static void BlurPass(byte[] source, byte[] target, int width, int height, int radius, bool horizontal)
     {
-        int major = horizontal ? height : width;
-        int minor = horizontal ? width : height;
+        int lines = horizontal ? height : width;
+        int length = horizontal ? width : height;
+        int step = horizontal ? 4 : width * 4;
+        int window = radius * 2 + 1;
 
-        for (int outer = 0; outer < major; outer++)
+        for (int line = 0; line < lines; line++)
         {
-            for (int inner = 0; inner < minor; inner++)
+            int origin = horizontal ? line * width * 4 : line * 4;
+            int b = 0, g = 0, r = 0;
+
+            for (int k = -radius; k <= radius; k++)
             {
-                int b = 0, g = 0, r = 0, a = 0, taps = 0;
+                int index = origin + Math.Clamp(k, 0, length - 1) * step;
+                b += source[index];
+                g += source[index + 1];
+                r += source[index + 2];
+            }
 
-                for (int k = -radius; k <= radius; k++)
-                {
-                    int sample = inner + k;
-                    if (sample < 0 || sample >= minor) continue;
+            for (int i = 0; i < length; i++)
+            {
+                int destination = origin + i * step;
+                target[destination] = (byte)(b / window);
+                target[destination + 1] = (byte)(g / window);
+                target[destination + 2] = (byte)(r / window);
+                target[destination + 3] = 255;
 
-                    int index = horizontal ? (outer * width + sample) * 4 : (sample * width + outer) * 4;
-                    b += source[index];
-                    g += source[index + 1];
-                    r += source[index + 2];
-                    a += source[index + 3];
-                    taps++;
-                }
-
-                int destination = horizontal ? (outer * width + inner) * 4 : (inner * width + outer) * 4;
-                target[destination] = (byte)(b / taps);
-                target[destination + 1] = (byte)(g / taps);
-                target[destination + 2] = (byte)(r / taps);
-                target[destination + 3] = (byte)(a / taps);
+                int entering = origin + Math.Clamp(i + radius + 1, 0, length - 1) * step;
+                int leaving = origin + Math.Clamp(i - radius, 0, length - 1) * step;
+                b += source[entering] - source[leaving];
+                g += source[entering + 1] - source[leaving + 1];
+                r += source[entering + 2] - source[leaving + 2];
             }
         }
     }

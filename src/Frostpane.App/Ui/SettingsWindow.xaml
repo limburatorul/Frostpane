@@ -61,6 +61,24 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="140" />
                     <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Look" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <RadioButton x:Name="PresetGlass" Content="Glass" GroupName="Preset" Margin="0,0,14,0"
+                                 Foreground="#F0F0F4" />
+                    <RadioButton x:Name="PresetAcrylic" Content="Acrylic" GroupName="Preset" Margin="0,0,14,0"
+                                 Foreground="#F0F0F4" />
+                    <RadioButton x:Name="PresetFrosted" Content="Frosted" GroupName="Preset"
+                                 Foreground="#F0F0F4" />
+                </StackPanel>
+            </Grid>
+            <TextBlock Style="{StaticResource Hint}"
+                       Text="A preset multiplies the softness below rather than replacing it, and sets saturation, brightness and grain to match." />
+
+            <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="48" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="Softness" VerticalAlignment="Center" />
@@ -82,6 +100,34 @@
             </Grid>
             <TextBlock Style="{StaticResource Hint}"
                        Text="A dark wallpaper blurs to near black, which reads as a solid box. This lifts it until it reads as glass." />
+
+            <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="48" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Saturation" VerticalAlignment="Center" />
+                <Slider x:Name="SaturationSlider" Grid.Column="1" Minimum="0" Maximum="200" />
+                <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
+                           Text="{Binding Value, ElementName=SaturationSlider, StringFormat={}{0:0}%}" />
+            </Grid>
+            <TextBlock Style="{StaticResource Hint}"
+                       Text="What separates acrylic from a plain blur is the jump in saturation, not more blur. Lower it if a colourful wallpaper washes the pane in its own hue." />
+
+            <Grid Style="{StaticResource Row}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="48" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Grain" VerticalAlignment="Center" />
+                <Slider x:Name="GrainSlider" Grid.Column="1" Minimum="0" Maximum="8" />
+                <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
+                           Text="{Binding Value, ElementName=GrainSlider, StringFormat={}{0:0}%}" />
+            </Grid>
+            <TextBlock Style="{StaticResource Hint}"
+                       Text="The other half of acrylic. Real grain sits at 2-4%; much more stops reading as texture and starts reading as dirt on the screen." />
 
             <Grid Style="{StaticResource Row}">
                 <Grid.ColumnDefinitions>

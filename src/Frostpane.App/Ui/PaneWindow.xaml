@@ -19,6 +19,7 @@
         <Grid x:Name="Glass">
             <Border x:Name="Backdrop" CornerRadius="10" />
             <Border x:Name="Tint" CornerRadius="10" Background="#73141419" />
+            <Border x:Name="Grain" CornerRadius="10" />
         </Grid>
 
         <Border x:Name="Frame" CornerRadius="10" BorderBrush="#2EFFFFFF" BorderThickness="1">

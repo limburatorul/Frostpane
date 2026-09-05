@@ -34,7 +34,8 @@ public partial class SettingsWindow : Window
 
         foreach (var slider in new[]
                  {
-                     SoftnessSlider, BrightnessSlider, OpacitySlider, TintSlider, CornerSlider,
+                     SoftnessSlider, BrightnessSlider, SaturationSlider, GrainSlider,
+                     OpacitySlider, TintSlider, CornerSlider,
                      TitleHeightSlider, TitleStrengthSlider, BorderThicknessSlider, BorderStrengthSlider,
                      IconSlider,
                  })
@@ -47,6 +48,10 @@ public partial class SettingsWindow : Window
             box.Checked += (_, _) => Apply();
             box.Unchecked += (_, _) => Apply();
         }
+
+        PresetGlass.Checked += (_, _) => UsePreset("glass", 120, 8, 0);
+        PresetAcrylic.Checked += (_, _) => UsePreset("acrylic", 200, 16, 4);
+        PresetFrosted.Checked += (_, _) => UsePreset("frosted", 110, 26, 6);
 
         TintColorButton.Click += (_, _) => PickColour(c => _settings.TintColor = c, _settings.TintColor);
         TitleColorButton.Click += (_, _) => PickColour(c => _settings.TitleBarColor = c, _settings.TitleBarColor);
@@ -75,6 +80,15 @@ public partial class SettingsWindow : Window
 
         SoftnessSlider.Value = _settings.BlurSoftness;
         BrightnessSlider.Value = _settings.BlurBrightness;
+        SaturationSlider.Value = _settings.BlurSaturation;
+        GrainSlider.Value = _settings.BlurGrain;
+
+        switch (_settings.BlurPreset)
+        {
+            case "glass": PresetGlass.IsChecked = true; break;
+            case "frosted": PresetFrosted.IsChecked = true; break;
+            default: PresetAcrylic.IsChecked = true; break;
+        }
         OpacitySlider.Value = _settings.BackgroundOpacity;
         TintSlider.Value = _settings.TintStrength;
         CornerSlider.Value = _settings.CornerRadius;
@@ -131,6 +145,8 @@ public partial class SettingsWindow : Window
 
         _settings.BlurSoftness = (int)SoftnessSlider.Value;
         _settings.BlurBrightness = (int)BrightnessSlider.Value;
+        _settings.BlurSaturation = (int)SaturationSlider.Value;
+        _settings.BlurGrain = (int)GrainSlider.Value;
         _settings.BackgroundOpacity = (int)OpacitySlider.Value;
         _settings.TintStrength = (int)TintSlider.Value;
         _settings.CornerRadius = (int)CornerSlider.Value;
@@ -143,10 +159,30 @@ public partial class SettingsWindow : Window
         _changed();
     }
 
+    /// <summary>
+    /// Applies a named look. The softness slider is left alone on purpose: the preset multiplies
+    /// it, so whatever the user set stays meaningful across all three.
+    /// </summary>
+    private void UsePreset(string name, int saturation, int brightness, int grain)
+    {
+        if (_loading) return;
+
+        _settings.BlurPreset = name;
+
+        _loading = true;
+        SaturationSlider.Value = saturation;
+        BrightnessSlider.Value = brightness;
+        GrainSlider.Value = grain;
+        _loading = false;
+
+        Apply();
+    }
+
     private void Reset()
     {
         var defaults = new Settings();
 
+        _settings.BlurPreset = defaults.BlurPreset;
         _settings.TintColor = defaults.TintColor;
         _settings.TitleBarColor = defaults.TitleBarColor;
         _settings.BorderColor = defaults.BorderColor;
@@ -156,6 +192,9 @@ public partial class SettingsWindow : Window
         PeekBox.IsChecked = defaults.PeekOnHover;
         SoftnessSlider.Value = defaults.BlurSoftness;
         BrightnessSlider.Value = defaults.BlurBrightness;
+        SaturationSlider.Value = defaults.BlurSaturation;
+        GrainSlider.Value = defaults.BlurGrain;
+        PresetAcrylic.IsChecked = true;
         OpacitySlider.Value = defaults.BackgroundOpacity;
         TintSlider.Value = defaults.TintStrength;
         CornerSlider.Value = defaults.CornerRadius;

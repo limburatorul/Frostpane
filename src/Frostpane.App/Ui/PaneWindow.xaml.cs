@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Frostpane.Interop;
 using Frostpane.Model;
@@ -124,6 +125,9 @@ public partial class PaneWindow : Window
         };
         Backdrop.CornerRadius = corners;
         Tint.CornerRadius = corners;
+        Grain.CornerRadius = corners;
+        Grain.Background = GrainBrush;
+        Grain.Opacity = Math.Clamp(settings.BlurGrain, 0, 8) / 100.0;
         Frame.CornerRadius = corners;
         TitleBar.CornerRadius = new CornerRadius(corners.TopLeft, corners.TopRight, 0, 0);
 
@@ -149,6 +153,42 @@ public partial class PaneWindow : Window
         var color = ParseColor(hex);
         color.A = (byte)Math.Round(strength * 255 / 100.0);
         return color;
+    }
+
+    /// <summary>
+    /// A tile of fine noise, laid over the blurred sample at a few percent.
+    ///
+    /// Grain is the other half of what separates acrylic from a plain blur, and the amount matters:
+    /// real acrylic grain sits around 2-4%, and anything near ten times that stops reading as
+    /// texture and starts reading as dirt on the screen. It is drawn at one tile pixel per device
+    /// pixel, because grain stretched with the sample would just be more blur.
+    /// </summary>
+    private static ImageBrush? _grain;
+
+    private static ImageBrush GrainBrush
+    {
+        get
+        {
+            if (_grain is not null) return _grain;
+
+            const int size = 128;
+            var pixels = new byte[size * size];
+            var random = new Random(20260905);
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = (byte)random.Next(96, 160);
+
+            var bitmap = BitmapSource.Create(size, size, 96, 96, PixelFormats.Gray8, null, pixels, size);
+            bitmap.Freeze();
+
+            _grain = new ImageBrush(bitmap)
+            {
+                TileMode = TileMode.Tile,
+                ViewportUnits = BrushMappingMode.Absolute,
+                Viewport = new Rect(0, 0, size, size),
+                Stretch = Stretch.None,
+            };
+            _grain.Freeze();
+            return _grain;
+        }
     }
 
     private static Color ParseColor(string value)

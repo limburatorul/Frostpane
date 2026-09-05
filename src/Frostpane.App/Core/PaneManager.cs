@@ -75,11 +75,8 @@ internal sealed class PaneManager : IDisposable
 
         try
         {
-            _capture = new WallpaperCapture(_layer.IconHost)
-            {
-                Softness = _layout.Settings.BlurSoftness,
-                Brightness = _layout.Settings.BlurBrightness,
-            };
+            _capture = new WallpaperCapture(_layer.IconHost);
+            Tune(_capture);
             _capture.FrameReady += OnWallpaperFrame;
             _capture.Stopped += () => _dispatcher.BeginInvoke(StartCapture);
             BlurStatus = "starting…";
@@ -90,6 +87,18 @@ internal sealed class PaneManager : IDisposable
             _capture = null;
             BlurStatus = "unavailable — " + ex.Message;
         }
+    }
+
+    /// <summary>
+    /// Hands the current look to the capture. The preset multiplies the softness rather than
+    /// replacing it, so the slider keeps meaning what it says at every preset.
+    /// </summary>
+    private void Tune(WallpaperCapture capture)
+    {
+        var settings = _layout.Settings;
+        capture.Softness = (int)Math.Round(settings.BlurSoftness * settings.PresetSoftness);
+        capture.Saturation = settings.BlurSaturation;
+        capture.Brightness = settings.BlurBrightness;
     }
 
     /// <summary>
@@ -239,8 +248,7 @@ internal sealed class PaneManager : IDisposable
         }
         else if (_capture is not null)
         {
-            _capture.Softness = _layout.Settings.BlurSoftness;
-            _capture.Brightness = _layout.Settings.BlurBrightness;
+            Tune(_capture);
             _capture.Publish();     // a static wallpaper sends no new frame to apply these to
         }
 

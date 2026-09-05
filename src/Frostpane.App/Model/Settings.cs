@@ -33,6 +33,26 @@ internal sealed class Settings
     /// </summary>
     public int BlurBrightness { get; set; } = 24;
 
+    /// <summary>
+    /// Named look: <c>glass</c>, <c>acrylic</c> or <c>frosted</c>. The preset multiplies
+    /// <see cref="BlurSoftness"/> rather than replacing it, so that slider keeps meaning what it says.
+    /// </summary>
+    public string BlurPreset { get; set; } = "acrylic";
+
+    /// <summary>Colour saturation of the sample, 0–200%. The lift that makes a blur read as acrylic.</summary>
+    public int BlurSaturation { get; set; } = 200;
+
+    /// <summary>Film grain over the sample, 0–8%. Real acrylic grain sits at 2–4%; more reads as dirt.</summary>
+    public int BlurGrain { get; set; } = 4;
+
+    /// <summary>Softness multiplier the current preset applies.</summary>
+    public double PresetSoftness => BlurPreset switch
+    {
+        "glass" => 1.0,
+        "frosted" => 3.0,
+        _ => 2.1,
+    };
+
     /// <summary>Unroll a rolled-up pane while the pointer rests on it, then roll it back.</summary>
     public bool PeekOnHover { get; set; } = true;
 

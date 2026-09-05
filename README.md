@@ -72,7 +72,30 @@ Frostpane face la fel, cu două reglaje:
 - **Background opacity** sub 100% lasă wallpaper-ul viu, neblurat, să treacă prin panou. E un efect
   diferit: nu sticlă mată, ci geam.
 
-Implicit: opacitate 100, luminozitate 24, moliciune 4 — sticlă mată.
+### Rețeta
+
+Ce separă acrylic-ul de un blur simplu **nu e mai mult blur**, ci saltul de saturație plus un strat
+de grain. Fără zgomot arată doar ca un blur mai gras. De aici cele trei presetări:
+
+| presetare | moliciune | saturație | luminozitate | grain |
+|---|---|---|---|---|
+| glass | ×1 | 120% | 8% | fără |
+| acrylic | ×2,1 | 200% | 16% | 4% |
+| frosted | ×3 | 110% | 26% | 6% |
+
+**Presetarea multiplică moliciunea, n-o înlocuiește**, ca sliderul să nu înceapă să mintă: 4 citește
+ca 4 / 8 / 12. Măsurat pe același wallpaper, variația rămasă în panou scade 28 → 19 → 9, iar
+saturația face saltul la acrylic: 26 → 37 → 18. Frosted, cu saturație aproape neutră, e varianta
+care ține textul lizibil peste un fundal colorat.
+
+**Grain-ul stă la 2–4%.** E o dală de zgomot fin, desenată un pixel de textură per pixel de ecran —
+întinsă odată cu proba ar fi doar mai mult blur. La zece ori mai mult nu mai citește ca textură, ci
+ca murdărie pe ecran.
+
+Blur-ul folosește o fereastră glisantă, deci costul nu crește cu raza: „frosted" la moliciune 10
+înseamnă rază 30 și costă cât raza 3.
+
+Implicit: acrylic, moliciune 4, saturație 200%, luminozitate 16%, grain 4%, opacitate 100.
 
 **Tenta** e limitată la 60%%, intenționat: o tentă care acoperă proba blurată transformă panoul
 înapoi într-un dreptunghi plat, adică exact problema pe care blur-ul o rezolvă.
@@ -167,3 +190,29 @@ validat toate ipotezele de mai sus și rămâne util când ceva se comportă ciu
 ```bash
 dotnet run --project tools/DesktopProbe -- dump
 ```
+
+## tools/HotkeyScan
+
+Utilitar separat, fără legătură cu panourile: află cine ține ocupată o combinație de taste.
+Fără argumente mătură ~760 de combinații uzuale și spune ce e liber, ce e luat și de cine; cu o
+combinație ca argument o investighează pe aceea singură.
+
+```bash
+dotnet run --project tools/HotkeyScan
+dotnet run --project tools/HotkeyScan -- Ctrl+Alt+S
+```
+
+Are patru straturi, în ordinea încrederii:
+
+1. **Proba în kernel** — încearcă `RegisterHotKey`; refuzul cu `ERROR_HOTKEY_ALREADY_REGISTERED`
+   e singura dovadă certă că altcineva deține combinația. Windows nu spune și cine.
+2. **Tabelul Windows** — scurtăturile pe care le rezervă sistemul, ca să nu apară drept
+   „owner unknown" lângă vinovații adevărați.
+3. **Config-urile aplicațiilor** — citește hotkey-urile declarate de PowerToys, ShareX, OBS și
+   scripturile AutoHotkey care rulează. Singura sursă care dă atribuire exactă.
+4. **Testul empiric** — apasă efectiv combinația și se uită ce fereastră, proces sau clipboard se
+   mișcă. Cere confirmare, fiindcă declanșează real acțiunea hotkey-ului.
+
+Limita de fond: aplicațiile care prind tastele printr-un hook global (Discord, AutoHotkey,
+software-ul de periferice) nu rezervă nimic în kernel, deci primul strat nu le vede deloc — doar
+testul empiric le prinde. Ce trece printr-un driver de tastatură nu se vede din user-mode nicicum.
