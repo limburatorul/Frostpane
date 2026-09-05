@@ -36,6 +36,10 @@ internal sealed class WallpaperCapture : IDisposable
     private readonly Direct3D11CaptureFramePool _framePool;
     private readonly GraphicsCaptureSession _session;
 
+    private readonly object _sampleLock = new();
+    private byte[]? _raw;
+    private int _rawWidth, _rawHeight, _sourceWidth, _sourceHeight;
+
     private IntPtr _mipTexture, _mipView, _staging;
     private int _stagingWidth, _stagingHeight;
     private DateTime _lastFrame = DateTime.MinValue;
@@ -172,6 +176,35 @@ internal sealed class WallpaperCapture : IDisposable
         finally { Marshal.Release(inspectable); }
     }
 
+    /// <summary>
+    /// Blurs the last sample again and hands it out.
+    ///
+    /// Kept separate from capturing because a capture only delivers a frame when something
+    /// repaints: on a static wallpaper the softness and brightness settings would otherwise have
+    /// no visible effect until the wallpaper happened to change.
+    /// </summary>
+    public void Publish()
+    {
+        byte[] pixels;
+        int width, height, sourceWidth, sourceHeight;
+
+        lock (_sampleLock)
+        {
+            if (_raw is null) return;
+            pixels = (byte[])_raw.Clone();
+            width = _rawWidth;
+            height = _rawHeight;
+            sourceWidth = _sourceWidth;
+            sourceHeight = _sourceHeight;
+        }
+
+        Blur(pixels, width, height, Math.Clamp(Softness, 1, 10), Math.Clamp(Brightness, 0, 80));
+
+        LastProcessed = DateTime.UtcNow;
+        LastError = null;
+        FrameReady?.Invoke(new WallpaperFrame(pixels, width, height, sourceWidth, sourceHeight));
+    }
+
     /// <summary>Mip-maps the frame down to a fraction of its size, then reads that level back.</summary>
     private void Reduce(IntPtr frameTexture, int width, int height)
     {
@@ -187,17 +220,22 @@ internal sealed class WallpaperCapture : IDisposable
         Check(D3D11.Map(_context, _staging, 0, D3D11.MapRead, out var mapped), "Map");
         try
         {
-            var pixels = new byte[smallWidth * smallHeight * 4];
+            var raw = new byte[smallWidth * smallHeight * 4];
             for (int row = 0; row < smallHeight; row++)
-                Marshal.Copy(mapped.Data + row * (int)mapped.RowPitch, pixels, row * smallWidth * 4, smallWidth * 4);
+                Marshal.Copy(mapped.Data + row * (int)mapped.RowPitch, raw, row * smallWidth * 4, smallWidth * 4);
 
-            Blur(pixels, smallWidth, smallHeight, Math.Clamp(Softness, 1, 10), Math.Clamp(Brightness, 0, 80));
-
-            LastProcessed = DateTime.UtcNow;
-            LastError = null;
-            FrameReady?.Invoke(new WallpaperFrame(pixels, smallWidth, smallHeight, width, height));
+            lock (_sampleLock)
+            {
+                _raw = raw;
+                _rawWidth = smallWidth;
+                _rawHeight = smallHeight;
+                _sourceWidth = width;
+                _sourceHeight = height;
+            }
         }
         finally { D3D11.Unmap(_context, _staging, 0); }
+
+        Publish();
     }
 
     private void EnsureTextures(int width, int height, int smallWidth, int smallHeight)

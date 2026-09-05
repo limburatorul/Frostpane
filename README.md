@@ -46,9 +46,10 @@ Rezultatul ajunge în `dist/`. Versiunea se schimbă într-un singur loc, `<Vers
 |---|---|
 | **Panou** | Dreptunghi translucid cu titlu. Trage de titlu ca să-l muți, de margini ca să-l redimensionezi. |
 | **Pliere** | Dublu-click pe bară pliază și depliază, animat. Dublu-click pe **nume** redenumește. |
-| **Lipire de margine** | Tras pe marginea de sus sau de jos a ecranului, panoul se lipește și se pliază singur. Tras înapoi, se depliază. |
+| **Lipire de margine** | Tras pe marginea de sus sau de jos a ecranului, panoul se lipește și se pliază singur. Tras înapoi, se depliază. Colțurile de pe marginea andocată rămân drepte. |
 | **Peek la hover** | Cu mouse-ul pe un panou pliat, acesta se deschide cât stai pe el; se închide la loc când pleci. |
-| **Setări** | Blur pornit/oprit, moliciunea și luminozitatea blur-ului, opacitatea fundalului, intensitatea și culoarea tentei, mărimea iconițelor, peek, pornire la logon. Din tray sau din click dreapta pe panou. |
+| **Setări** | Blur, culoarea și intensitatea panoului, raza colțurilor, înălțimea și culoarea barei de titlu, culoarea, grosimea și intensitatea bordurii, mărimea iconițelor, peek, pornire la logon. Din tray, din click dreapta pe panou, sau cu `--settings`. |
+| **Drop** | Trage un fișier peste un panou și intră în el. Ce nu e deja pe desktop e mutat acolo întâi; peste un portal, fișierul e mutat în folderul oglindit. |
 | **Adopție** | Orice iconiță pe care o tragi pe desktop peste un panou intră în el. Shell-ul o mută, noi o revendicăm. |
 | **Lansare** | Dublu-click pe o iconiță dintr-un panou o deschide, cu verbul implicit al shell-ului. |
 | **Meniu contextual** | Click dreapta pe o iconiță: Deschide / Redenumește / Șterge / Proprietăți — dialogurile reale ale Windows-ului. |

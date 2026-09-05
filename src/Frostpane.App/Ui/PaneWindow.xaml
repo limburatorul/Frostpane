@@ -10,6 +10,7 @@
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display"
+        AllowDrop="True"
         Title="Pane">
 
     <Grid>
@@ -20,7 +21,7 @@
             <Border x:Name="Tint" CornerRadius="10" Background="#73141419" />
         </Grid>
 
-        <Border CornerRadius="10" BorderBrush="#2EFFFFFF" BorderThickness="1">
+        <Border x:Name="Frame" CornerRadius="10" BorderBrush="#2EFFFFFF" BorderThickness="1">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -29,7 +30,7 @@
 
                 <!-- Title bar: drag to move, double-click to roll up. Double-clicking the name
                      itself asks to rename. -->
-                <Border x:Name="TitleBar" Grid.Row="0" Height="30" CornerRadius="9,9,0,0" Background="#22FFFFFF">
+                <Border x:Name="TitleBar" Grid.Row="0" Height="24" CornerRadius="9,9,0,0" Background="#22FFFFFF">
                     <Grid>
                         <TextBlock x:Name="TitleText"
                                    Text="Pane"

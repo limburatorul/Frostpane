@@ -228,7 +228,9 @@ internal sealed class PaneManager : IDisposable
     /// <summary>Pushes the current settings onto every open pane.</summary>
     public void ApplySettings()
     {
-        foreach (var window in _windows.Values) window.ApplyAppearance(_layout.Settings);
+        foreach (var pane in _layout.Panes)
+            if (_windows.TryGetValue(pane.Id, out var window))
+                window.ApplyAppearance(_layout.Settings, (SnapEdge)pane.Dock);
 
         bool running = _capture is not null;
         if (_layout.Settings.BlurWallpaper != running)
@@ -239,6 +241,7 @@ internal sealed class PaneManager : IDisposable
         {
             _capture.Softness = _layout.Settings.BlurSoftness;
             _capture.Brightness = _layout.Settings.BlurBrightness;
+            _capture.Publish();     // a static wallpaper sends no new frame to apply these to
         }
 
         foreach (var pane in _layout.Panes) ApplyBackdrop(pane);
@@ -313,6 +316,7 @@ internal sealed class PaneManager : IDisposable
             pane.ExpandedY = pane.Y;
             pane.RolledUp = true;
             pane.Dock = (int)edge;
+            window.ApplyAppearance(_layout.Settings, edge);
 
             int height = window.TitleBarHeightPixels;
             if (edge == SnapEdge.Bottom) pane.Y = pane.Y + pane.Height - height;
@@ -325,6 +329,7 @@ internal sealed class PaneManager : IDisposable
         {
             pane.RolledUp = false;
             pane.Dock = 0;
+            window.ApplyAppearance(_layout.Settings, SnapEdge.None);
             pane.Y = pane.ExpandedY;
             pane.Height = pane.ExpandedHeight;
 
@@ -398,8 +403,9 @@ internal sealed class PaneManager : IDisposable
             ContextMenuRequested?.Invoke(pane, tile, new PaneMenuContext(screen, local, window));
         window.ItemActivated += tile => InvokeVerb(pane, tile.Id, null);
         window.ItemDropped += (tile, pt) => DropItem(pane, tile, pt);
+        window.FilesDropped += paths => DropFiles(pane, paths);
 
-        window.ApplyAppearance(_layout.Settings);
+        window.ApplyAppearance(_layout.Settings, (SnapEdge)pane.Dock);
         window.Show();
         window.SetRolledUp(pane.RolledUp);
         Place(pane, window);
@@ -471,6 +477,84 @@ internal sealed class PaneManager : IDisposable
 
         Save();
         Reconcile();
+    }
+
+    /// <summary>
+    /// Takes files dropped onto a pane from the shell.
+    ///
+    /// A pane is a top-level window, so it sits between the pointer and the desktop and has to
+    /// accept the drop itself. Items already on the desktop are simply claimed; anything else is
+    /// moved onto the desktop first, which is what dropping it there would have done anyway.
+    /// </summary>
+    private void DropFiles(Pane pane, string[] paths)
+    {
+        if (pane.IsPortal)
+        {
+            MoveInto(paths, pane.PortalPath!);
+            Reconcile();
+            return;
+        }
+
+        string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        var claimed = new List<string>();
+
+        foreach (string path in paths)
+        {
+            string? folder = System.IO.Path.GetDirectoryName(path);
+            if (folder is not null && IsDesktopFolder(folder))
+            {
+                claimed.Add(path);
+                continue;
+            }
+
+            string moved = MoveInto(new[] { path }, desktop).FirstOrDefault() ?? "";
+            if (moved.Length != 0) claimed.Add(moved);
+        }
+
+        foreach (string id in claimed)
+            if (!pane.Items.Contains(id))
+                pane.Items.Add(id);
+
+        Save();
+        Reconcile();
+    }
+
+    /// <summary>True for either desktop folder — the user's own and the one shared by all users.</summary>
+    private static bool IsDesktopFolder(string folder)
+    {
+        string candidate = System.IO.Path.TrimEndingDirectorySeparator(folder);
+
+        return Same(Environment.SpecialFolder.Desktop) || Same(Environment.SpecialFolder.CommonDesktopDirectory);
+
+        bool Same(Environment.SpecialFolder which) =>
+            string.Equals(candidate,
+                          System.IO.Path.TrimEndingDirectorySeparator(Environment.GetFolderPath(which)),
+                          StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Moves files into a folder, skipping any that cannot be moved. Returns the new paths.</summary>
+    private static List<string> MoveInto(IEnumerable<string> paths, string folder)
+    {
+        var moved = new List<string>();
+
+        foreach (string path in paths)
+        {
+            string target = System.IO.Path.Combine(folder, System.IO.Path.GetFileName(path));
+            if (string.Equals(path, target, StringComparison.OrdinalIgnoreCase)) { moved.Add(target); continue; }
+
+            try
+            {
+                if (Directory.Exists(path)) Directory.Move(path, target);
+                else File.Move(path, target);
+                moved.Add(target);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Locked, in use, or a permission the user does not have; leave it where it is.
+            }
+        }
+
+        return moved;
     }
 
     /// <summary>Drops the item at the slot the pointer is over, so a pane can be ordered by hand.</summary>

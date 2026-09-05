@@ -103,14 +103,38 @@ public partial class PaneWindow : Window
         set => SetValue(TileSizeProperty, value);
     }
 
-    internal void ApplyAppearance(Settings settings)
+    /// <summary>
+    /// Applies the shared appearance. The dock edge matters: a pane latched onto the top of the
+    /// screen should meet that edge squarely, so only its free corners stay rounded.
+    /// </summary>
+    internal void ApplyAppearance(Settings settings, SnapEdge dock)
     {
         Glass.Opacity = Math.Clamp(settings.BackgroundOpacity, 20, 100) / 100.0;
 
         // Capped well below opaque: a tint that covers the blurred sample defeats the point.
-        var tint = ParseColor(settings.TintColor);
-        tint.A = (byte)Math.Round(Math.Clamp(settings.TintStrength, 0, 60) * 255 / 100.0);
-        Tint.Background = new SolidColorBrush(tint);
+        Tint.Background = new SolidColorBrush(
+            Tinted(settings.TintColor, Math.Clamp(settings.TintStrength, 0, 60)));
+
+        double radius = Math.Clamp(settings.CornerRadius, 0, 20);
+        var corners = dock switch
+        {
+            SnapEdge.Top => new CornerRadius(0, 0, radius, radius),
+            SnapEdge.Bottom => new CornerRadius(radius, radius, 0, 0),
+            _ => new CornerRadius(radius),
+        };
+        Backdrop.CornerRadius = corners;
+        Tint.CornerRadius = corners;
+        Frame.CornerRadius = corners;
+        TitleBar.CornerRadius = new CornerRadius(corners.TopLeft, corners.TopRight, 0, 0);
+
+        Frame.BorderThickness = new Thickness(Math.Clamp(settings.BorderThickness, 0, 4));
+        Frame.BorderBrush = new SolidColorBrush(
+            Tinted(settings.BorderColor, Math.Clamp(settings.BorderStrength, 0, 100)));
+
+        TitleBar.Height = Math.Clamp(settings.TitleBarHeight, 16, 40);
+        TitleBar.Background = new SolidColorBrush(
+            Tinted(settings.TitleBarColor, Math.Clamp(settings.TitleBarStrength, 0, 100)));
+        TitleText.FontSize = Math.Clamp(TitleBar.Height - 11, 9, 16);
 
         _blurEnabled = settings.BlurWallpaper;
         if (!_blurEnabled) Backdrop.Background = null;
@@ -118,6 +142,13 @@ public partial class PaneWindow : Window
         PeekOnHover = settings.PeekOnHover;
         IconSize = Math.Clamp(settings.IconSize, 24, 64);
         TileSize = IconSize + 50;
+    }
+
+    private static Color Tinted(string hex, int strength)
+    {
+        var color = ParseColor(hex);
+        color.A = (byte)Math.Round(strength * 255 / 100.0);
+        return color;
     }
 
     private static Color ParseColor(string value)
@@ -269,6 +300,24 @@ public partial class PaneWindow : Window
 
     /// <summary>Raised when a tile is dropped, with the screen point it was released at.</summary>
     internal event Action<IconTile, POINT>? ItemDropped;
+
+    /// <summary>Raised when files are dropped onto the pane from the shell.</summary>
+    internal event Action<string[]>? FilesDropped;
+
+    protected override void OnDragOver(DragEventArgs e)
+    {
+        base.OnDragOver(e);
+        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    protected override void OnDrop(DragEventArgs e)
+    {
+        base.OnDrop(e);
+        if (e.Data.GetData(DataFormats.FileDrop) is string[] paths && paths.Length > 0)
+            FilesDropped?.Invoke(paths);
+        e.Handled = true;
+    }
 
     private Grip GripAt(Point p)
     {

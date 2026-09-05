@@ -1,4 +1,8 @@
 using System.Windows;
+using System.Windows.Media;
+using Color = System.Windows.Media.Color;
+using ColorConverter = System.Windows.Media.ColorConverter;
+using System.Windows.Threading;
 using Frostpane.Core;
 using Frostpane.Model;
 
@@ -10,14 +14,10 @@ namespace Frostpane.Ui;
 /// </summary>
 public partial class SettingsWindow : Window
 {
-    private const string DarkTint = "#141419";
-    private const string NeutralTint = "#3A3A44";
-    private const string LightTint = "#C8C8D2";
-
     private readonly Settings _settings;
     private readonly Action _changed;
     private readonly Func<string> _blurStatus;
-    private readonly System.Windows.Threading.DispatcherTimer _statusTimer;
+    private readonly DispatcherTimer _statusTimer;
 
     private bool _loading = true;
 
@@ -29,55 +29,97 @@ public partial class SettingsWindow : Window
         _changed = changed;
         _blurStatus = blurStatus;
 
-        _statusTimer = new System.Windows.Threading.DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(700),
-        };
-        _statusTimer.Tick += (_, _) => BlurStatusText.Text = "Wallpaper capture: " + _blurStatus();
-        _statusTimer.Start();
-        BlurStatusText.Text = "Wallpaper capture: " + _blurStatus();
-        Closed += (_, _) => _statusTimer.Stop();
-
         Load();
         _loading = false;
 
-        PeekBox.Checked += (_, _) => Apply();
-        PeekBox.Unchecked += (_, _) => Apply();
-        BlurBox.Checked += (_, _) => Apply();
-        BlurBox.Unchecked += (_, _) => Apply();
-        SoftnessSlider.ValueChanged += (_, _) => Apply();
-        BrightnessSlider.ValueChanged += (_, _) => Apply();
-        OpacitySlider.ValueChanged += (_, _) => Apply();
-        TintSlider.ValueChanged += (_, _) => Apply();
-        IconSlider.ValueChanged += (_, _) => Apply();
-        TintDark.Checked += (_, _) => Apply();
-        TintNeutral.Checked += (_, _) => Apply();
-        TintLight.Checked += (_, _) => Apply();
+        foreach (var slider in new[]
+                 {
+                     SoftnessSlider, BrightnessSlider, OpacitySlider, TintSlider, CornerSlider,
+                     TitleHeightSlider, TitleStrengthSlider, BorderThicknessSlider, BorderStrengthSlider,
+                     IconSlider,
+                 })
+        {
+            slider.ValueChanged += (_, _) => Apply();
+        }
+
+        foreach (var box in new[] { BlurBox, PeekBox })
+        {
+            box.Checked += (_, _) => Apply();
+            box.Unchecked += (_, _) => Apply();
+        }
+
+        TintColorButton.Click += (_, _) => PickColour(c => _settings.TintColor = c, _settings.TintColor);
+        TitleColorButton.Click += (_, _) => PickColour(c => _settings.TitleBarColor = c, _settings.TitleBarColor);
+        BorderColorButton.Click += (_, _) => PickColour(c => _settings.BorderColor = c, _settings.BorderColor);
 
         AutostartBox.Checked += (_, _) => Autostart.Enabled = true;
         AutostartBox.Unchecked += (_, _) => Autostart.Enabled = false;
 
         ResetButton.Click += (_, _) => Reset();
         CloseButton.Click += (_, _) => Close();
+
+        _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+        _statusTimer.Tick += (_, _) => ShowStatus();
+        _statusTimer.Start();
+        ShowStatus();
+        Closed += (_, _) => _statusTimer.Stop();
     }
+
+    private void ShowStatus() => BlurStatusText.Text = "Wallpaper capture: " + _blurStatus();
 
     private void Load()
     {
         BlurBox.IsChecked = _settings.BlurWallpaper;
         PeekBox.IsChecked = _settings.PeekOnHover;
+        AutostartBox.IsChecked = Autostart.Enabled;
+
         SoftnessSlider.Value = _settings.BlurSoftness;
         BrightnessSlider.Value = _settings.BlurBrightness;
         OpacitySlider.Value = _settings.BackgroundOpacity;
         TintSlider.Value = _settings.TintStrength;
+        CornerSlider.Value = _settings.CornerRadius;
+        TitleHeightSlider.Value = _settings.TitleBarHeight;
+        TitleStrengthSlider.Value = _settings.TitleBarStrength;
+        BorderThicknessSlider.Value = _settings.BorderThickness;
+        BorderStrengthSlider.Value = _settings.BorderStrength;
         IconSlider.Value = _settings.IconSize;
-        AutostartBox.IsChecked = Autostart.Enabled;
 
-        switch (_settings.TintColor)
+        ShowSwatches();
+    }
+
+    private void ShowSwatches()
+    {
+        TintSwatch.Background = Brush(_settings.TintColor);
+        TitleSwatch.Background = Brush(_settings.TitleBarColor);
+        BorderSwatch.Background = Brush(_settings.BorderColor);
+    }
+
+    private static SolidColorBrush Brush(string hex)
+    {
+        try { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)!); }
+        catch (Exception) { return new SolidColorBrush(Colors.Gray); }
+    }
+
+    /// <summary>Uses the system colour picker rather than shipping one.</summary>
+    private void PickColour(Action<string> assign, string current)
+    {
+        using var dialog = new System.Windows.Forms.ColorDialog { FullOpen = true };
+
+        try
         {
-            case NeutralTint: TintNeutral.IsChecked = true; break;
-            case LightTint: TintLight.IsChecked = true; break;
-            default: TintDark.IsChecked = true; break;
+            var colour = (Color)ColorConverter.ConvertFromString(current)!;
+            dialog.Color = System.Drawing.Color.FromArgb(colour.R, colour.G, colour.B);
         }
+        catch (Exception)
+        {
+            // An unreadable stored colour just means the picker opens on its default.
+        }
+
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+
+        assign($"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}");
+        ShowSwatches();
+        _changed();
     }
 
     private void Apply()
@@ -86,14 +128,17 @@ public partial class SettingsWindow : Window
 
         _settings.BlurWallpaper = BlurBox.IsChecked == true;
         _settings.PeekOnHover = PeekBox.IsChecked == true;
+
         _settings.BlurSoftness = (int)SoftnessSlider.Value;
         _settings.BlurBrightness = (int)BrightnessSlider.Value;
         _settings.BackgroundOpacity = (int)OpacitySlider.Value;
         _settings.TintStrength = (int)TintSlider.Value;
+        _settings.CornerRadius = (int)CornerSlider.Value;
+        _settings.TitleBarHeight = (int)TitleHeightSlider.Value;
+        _settings.TitleBarStrength = (int)TitleStrengthSlider.Value;
+        _settings.BorderThickness = (int)BorderThicknessSlider.Value;
+        _settings.BorderStrength = (int)BorderStrengthSlider.Value;
         _settings.IconSize = (int)IconSlider.Value;
-        _settings.TintColor = TintNeutral.IsChecked == true ? NeutralTint
-                            : TintLight.IsChecked == true ? LightTint
-                            : DarkTint;
 
         _changed();
     }
@@ -102,6 +147,10 @@ public partial class SettingsWindow : Window
     {
         var defaults = new Settings();
 
+        _settings.TintColor = defaults.TintColor;
+        _settings.TitleBarColor = defaults.TitleBarColor;
+        _settings.BorderColor = defaults.BorderColor;
+
         _loading = true;
         BlurBox.IsChecked = defaults.BlurWallpaper;
         PeekBox.IsChecked = defaults.PeekOnHover;
@@ -109,10 +158,15 @@ public partial class SettingsWindow : Window
         BrightnessSlider.Value = defaults.BlurBrightness;
         OpacitySlider.Value = defaults.BackgroundOpacity;
         TintSlider.Value = defaults.TintStrength;
+        CornerSlider.Value = defaults.CornerRadius;
+        TitleHeightSlider.Value = defaults.TitleBarHeight;
+        TitleStrengthSlider.Value = defaults.TitleBarStrength;
+        BorderThicknessSlider.Value = defaults.BorderThickness;
+        BorderStrengthSlider.Value = defaults.BorderStrength;
         IconSlider.Value = defaults.IconSize;
-        TintDark.IsChecked = true;
         _loading = false;
 
+        ShowSwatches();
         Apply();
     }
 }

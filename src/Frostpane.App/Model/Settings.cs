@@ -39,5 +39,28 @@ internal sealed class Settings
     /// <summary>Icon edge in device-independent pixels, 24–64.</summary>
     public int IconSize { get; set; } = 36;
 
+    // ---- title bar ----
+
+    /// <summary>Title bar height in device-independent pixels, 16–40.</summary>
+    public int TitleBarHeight { get; set; } = 24;
+
+    public string TitleBarColor { get; set; } = "#FFFFFF";
+
+    /// <summary>How strongly the title bar colour shows, 0–100.</summary>
+    public int TitleBarStrength { get; set; } = 13;
+
+    // ---- border ----
+
+    public string BorderColor { get; set; } = "#FFFFFF";
+
+    /// <summary>Border opacity, 0–100.</summary>
+    public int BorderStrength { get; set; } = 18;
+
+    /// <summary>Border thickness in device-independent pixels, 0–4.</summary>
+    public int BorderThickness { get; set; } = 1;
+
+    /// <summary>Corner radius in device-independent pixels, 0–20.</summary>
+    public int CornerRadius { get; set; } = 10;
+
     public Settings Clone() => (Settings)MemberwiseClone();
 }
