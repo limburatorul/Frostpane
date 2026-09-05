@@ -66,10 +66,24 @@ Filename: "{app}\Frostpane.exe"; Description: "Pornește {#AppName}"; Flags: now
 Type: filesandordirs; Name: "{userappdata}\Frostpane"
 
 [Code]
-{ Autostart is owned by the app's own tray menu, so the uninstaller has to clear it. }
+{ Autostart and the desktop menu entries are written by the app itself, so the uninstaller,
+  not the installer, is what has to clear them. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Roots: array[0..1] of String;
+  I: Integer;
 begin
-  if CurUninstallStep = usPostUninstall then
-    RegDeleteValue(HKEY_CURRENT_USER,
-                   'Software\Microsoft\Windows\CurrentVersion\Run', 'Frostpane');
+  if CurUninstallStep <> usPostUninstall then
+    exit;
+
+  RegDeleteValue(HKEY_CURRENT_USER,
+                 'Software\Microsoft\Windows\CurrentVersion\Run', 'Frostpane');
+
+  Roots[0] := 'Software\Classes\DesktopBackground\Shell';
+  Roots[1] := 'Software\Classes\Directory\Background\shell';
+  for I := 0 to 1 do
+  begin
+    RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, Roots[I] + 'Frostpane.NewPane');
+    RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, Roots[I] + 'Frostpane.NewPortal');
+  end;
 end;

@@ -8,7 +8,7 @@ namespace Frostpane.Model;
 internal sealed class Pane
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string Label { get; set; } = "Pane";
+    public string Label { get; set; } = "Panou";
 
     /// <summary>Bounds in desktop coordinates — the same space the shell reports icon positions in.</summary>
     public int X { get; set; }

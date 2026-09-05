@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Threading;
@@ -19,10 +20,23 @@ public partial class App : Application
     private ToolStripItem? _updateItem;
     private DispatcherTimer? _updateTimer;
     private Update? _pending;
+    private Mutex? _singleInstance;
+    private CommandChannel? _commands;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        var requested = CommandFor(e.Args);
+
+        // Two copies would fight over the same icons, so a second one only forwards its command.
+        _singleInstance = new Mutex(initiallyOwned: true, "Frostpane.SingleInstance", out bool first);
+        if (!first)
+        {
+            if (requested is not null) CommandChannel.Send(requested.Value);
+            Shutdown();
+            return;
+        }
 
         _layer = new DesktopLayer();
         if (!_layer.IsValid)
@@ -34,7 +48,12 @@ public partial class App : Application
         }
 
         _manager = new PaneManager(_layer);
-        _manager.ContextMenuRequested += ShowFenceMenu;
+        _manager.ContextMenuRequested += ShowPaneMenu;
+
+        ShellMenu.Register();
+        _commands = new CommandChannel();
+        _commands.Received += Run;
+        if (requested is not null) Run(requested.Value);
 
         _tray = new NotifyIcon
         {
@@ -71,7 +90,7 @@ public partial class App : Application
     private ContextMenuStrip BuildTrayMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Panou nou", null, (_, _) => NewFenceAtCursor());
+        menu.Items.Add("Panou nou", null, (_, _) => NewPaneAtCursor());
         menu.Items.Add("Portal nou…", null, (_, _) => NewPortalAtCursor());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Eliberează toate iconițele", null, (_, _) => _manager!.ReleaseAllIcons());
@@ -94,7 +113,21 @@ public partial class App : Application
         return menu;
     }
 
-    private void NewFenceAtCursor() =>
+    /// <summary>Reads the verb the desktop menu was invoked with, if any.</summary>
+    private static ShellCommand? CommandFor(string[] args)
+    {
+        if (args.Contains("--new-pane")) return ShellCommand.NewPane;
+        if (args.Contains("--new-portal")) return ShellCommand.NewPortal;
+        return null;
+    }
+
+    private void Run(ShellCommand command)
+    {
+        if (command == ShellCommand.NewPane) NewPaneAtCursor();
+        else NewPortalAtCursor();
+    }
+
+    private void NewPaneAtCursor() =>
         _manager!.Create(_layer!.ScreenToDesktop(Win32.CursorPosition));
 
     private void NewPortalAtCursor()
@@ -107,7 +140,7 @@ public partial class App : Application
                          picker.SelectedPath);
     }
 
-    private void ShowFenceMenu(Pane pane, IconTile? tile, POINT screen)
+    private void ShowPaneMenu(Pane pane, IconTile? tile, POINT screen)
     {
         var menu = new ContextMenuStrip();
 
@@ -196,7 +229,9 @@ public partial class App : Application
         _manager?.ReleaseIconsForShutdown();
         _manager?.Dispose();
 
+        _commands?.Dispose();
         if (_tray is not null) { _tray.Visible = false; _tray.Dispose(); }
+        _singleInstance?.Dispose();
 
         base.OnExit(e);
     }

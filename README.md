@@ -13,7 +13,8 @@ per-utilizator, deci nu cere drepturi de administrator, și nu are nevoie de nic
 separat.
 
 Aplicația pornește fără fereastră proprie: o găsești în tray. Din meniul ei creezi primul panou,
-o pornești odată cu Windows, sau verifici actualizările.
+o pornești odată cu Windows, sau verifici actualizările. Panourile se pot crea și direct din meniul
+de click dreapta pe desktop.
 
 **Actualizare automată.** La pornire, și apoi din 6 în 6 ore, aplicația întreabă GitHub dacă există
 un release mai nou. Dacă da, te întreabă o singură dată dacă vrei să-l instaleze — refuzul se ține
@@ -45,6 +46,7 @@ Rezultatul ajunge în `dist/`. Versiunea se schimbă într-un singur loc, `<Vers
 | **Meniu contextual** | Click dreapta pe o iconiță: Deschide / Redenumește / Șterge / Proprietăți — dialogurile reale ale Windows-ului. |
 | **Portal** | Un panou care oglindește un folder de pe disc, cu miniaturi reale, actualizat automat. |
 | **Blur** | Fundalul fiecărui panou e o probă blurată a wallpaper-ului, actualizată ~10 ori pe secundă. |
+| **Meniu pe desktop** | Click dreapta pe desktop → **Panou nou aici** / **Portal nou aici**. Pe Windows 11 sunt sub „Show more options" (sau direct la Shift+click dreapta): meniul compact acceptă doar handler-e din pachete MSIX semnate. |
 | **Persistență** | `%APPDATA%\Frostpane\layout.json`. |
 
 ## Cum e construit
@@ -109,6 +111,9 @@ Trei plase de siguranță:
   („Windows protected your PC" → *More info* → *Run anyway").
 - Consumă în jur de 260 MB memorie privată, stabil: captura de wallpaper ține o textură cât întreg
   desktopul virtual. Fără blur ar fi o fracțiune din asta.
+- Intrările din meniul desktopului sunt verbe clasice de shell. Dacă altceva a preluat meniul de
+  click dreapta al desktopului — unele dock-uri și utilitare fac asta — s-ar putea să nu apară;
+  crearea din meniul tray funcționează oricum.
 
 ## tools/DesktopProbe
 

@@ -150,7 +150,7 @@ internal sealed class PaneManager : IDisposable
 
     // ---------- panes ----------
 
-    public Pane Create(POINT desktopPoint, string label = "Pane", string? portalPath = null)
+    public Pane Create(POINT desktopPoint, string label = "Panou", string? portalPath = null)
     {
         var pane = new Pane
         {
@@ -286,7 +286,7 @@ internal sealed class PaneManager : IDisposable
         if (from.IsPortal) return;
 
         var point = _layer.ScreenToDesktop(screen);
-        var target = FenceAt(point);
+        var target = PaneAt(point);
 
         if (ReferenceEquals(target, from))
         {
@@ -328,7 +328,7 @@ internal sealed class PaneManager : IDisposable
         return row * columns + col;
     }
 
-    private Pane? FenceAt(POINT desktopPoint) =>
+    private Pane? PaneAt(POINT desktopPoint) =>
         _layout.Panes.LastOrDefault(f => f.Contains(desktopPoint.X, desktopPoint.Y));
 
     // ---------- reconciliation ----------
@@ -351,7 +351,7 @@ internal sealed class PaneManager : IDisposable
         foreach (var icon in icons)
         {
             if (owned.Contains(icon.Id) || icon.Position.Y >= ParkedThreshold) continue;
-            if (FenceAt(icon.Position) is not { IsPortal: false } pane) continue;
+            if (PaneAt(icon.Position) is not { IsPortal: false } pane) continue;
             pane.Items.Add(icon.Id);
             owned.Add(icon.Id);
             changed = true;
