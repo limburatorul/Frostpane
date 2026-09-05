@@ -404,6 +404,7 @@ internal sealed class PaneManager : IDisposable
             Save();
             Reconcile();
         };
+        window.BoundsMoved += () => ApplyBackdrop(pane);
         window.RollUpToggled += () => ToggleRollUp(pane);
         window.PeekRequested += open => Peek(pane, open);
         window.RenameRequested += () => RenameRequested?.Invoke(pane);

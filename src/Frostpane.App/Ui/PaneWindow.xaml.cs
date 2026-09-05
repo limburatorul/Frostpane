@@ -238,10 +238,23 @@ public partial class PaneWindow : Window
         return IntPtr.Zero;
     }
 
+    /// <summary>
+    /// Raised on every geometry change, including each step of an animation.
+    ///
+    /// The backdrop is a crop of the wallpaper taken at the pane's size, so it has to be re-cut
+    /// whenever that size changes. Waiting for the next captured frame is not enough: a still
+    /// wallpaper sends none, and while a pane unrolls its old crop — three pixels tall when rolled
+    /// up — is simply stretched over the new height, which reads as no blur at all.
+    /// </summary>
+    internal event Action? BoundsMoved;
+
     /// <summary>Places the window in physical screen pixels, bypassing WPF's DPI-scaled Left/Top.</summary>
-    public void SetBounds(int x, int y, int width, int height) =>
+    public void SetBounds(int x, int y, int width, int height)
+    {
         Win32.SetWindowPos(Handle, IntPtr.Zero, x, y, width, height,
                            Win32.SWP_NOACTIVATE | Win32.SWP_NOZORDER);
+        BoundsMoved?.Invoke();
+    }
 
     public RECT Bounds
     {
