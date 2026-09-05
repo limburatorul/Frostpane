@@ -10,34 +10,38 @@
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display"
-        Title="Frostpane">
+        Title="Pane">
 
     <Grid>
-        <!-- The blurred wallpaper sample; transparent until the capture supplies one. -->
-        <Border x:Name="Backdrop" CornerRadius="10" />
+        <!-- The glass: a blurred sample of the wallpaper, tinted. Its opacity is what decides
+             whether the pane reads as frosted glass or as a solid box. -->
+        <Grid x:Name="Glass">
+            <Border x:Name="Backdrop" CornerRadius="10" />
+            <Border x:Name="Tint" CornerRadius="10" Background="#73141419" />
+        </Grid>
 
-        <Border x:Name="Shell"
-                CornerRadius="10"
-                Background="#4D000000"
-                BorderBrush="#2EFFFFFF"
-                BorderThickness="1">
+        <Border CornerRadius="10" BorderBrush="#2EFFFFFF" BorderThickness="1">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <!-- Title bar: drag to move, double-click to roll up. -->
+                <!-- Title bar: drag to move, double-click to roll up. Double-clicking the name
+                     itself asks to rename. -->
                 <Border x:Name="TitleBar" Grid.Row="0" Height="30" CornerRadius="9,9,0,0" Background="#22FFFFFF">
-                    <TextBlock x:Name="TitleText"
-                               Text="Panou"
-                               Foreground="#F2FFFFFF"
-                               FontSize="13"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center"
-                               HorizontalAlignment="Center"
-                               TextTrimming="CharacterEllipsis"
-                               Margin="12,0" />
+                    <Grid>
+                        <TextBlock x:Name="TitleText"
+                                   Text="Pane"
+                                   Foreground="#F2FFFFFF"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="12,0" />
+
+                    </Grid>
                 </Border>
 
                 <ScrollViewer x:Name="Body"
@@ -55,7 +59,8 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border x:Name="Tile"
-                                        Width="86" Height="86"
+                                        Width="{Binding TileSize, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Height="{Binding TileSize, RelativeSource={RelativeSource AncestorType=Window}}"
                                         Margin="2"
                                         CornerRadius="6"
                                         Background="Transparent"
@@ -63,7 +68,8 @@
                                         ToolTip="{Binding Name}">
                                     <StackPanel VerticalAlignment="Center">
                                         <Image Source="{Binding Image}"
-                                               Width="36" Height="36"
+                                               Width="{Binding IconSize, RelativeSource={RelativeSource AncestorType=Window}}"
+                                               Height="{Binding IconSize, RelativeSource={RelativeSource AncestorType=Window}}"
                                                RenderOptions.BitmapScalingMode="HighQuality" />
                                         <TextBlock Text="{Binding Name}"
                                                    Foreground="White"

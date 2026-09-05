@@ -10,7 +10,7 @@ internal static class Prompt
     {
         var box = new TextBox { Text = initial, Margin = new Thickness(0, 0, 0, 12), FontSize = 14 };
         var ok = new Button { Content = "OK", IsDefault = true, Width = 80, Margin = new Thickness(0, 0, 8, 0) };
-        var cancel = new Button { Content = "Anulează", IsCancel = true, Width = 80 };
+        var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 80 };
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         buttons.Children.Add(ok);

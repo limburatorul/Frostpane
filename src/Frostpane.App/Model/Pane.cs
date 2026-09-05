@@ -8,7 +8,7 @@ namespace Frostpane.Model;
 internal sealed class Pane
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string Label { get; set; } = "Panou";
+    public string Label { get; set; } = "Pane";
 
     /// <summary>Bounds in desktop coordinates — the same space the shell reports icon positions in.</summary>
     public int X { get; set; }
@@ -19,7 +19,16 @@ internal sealed class Pane
     /// <summary>Height to restore to when the pane is unrolled.</summary>
     public int ExpandedHeight { get; set; } = 360;
 
+    /// <summary>Top to restore to — a pane rolled against the bottom edge moves to stay there.</summary>
+    public int ExpandedY { get; set; }
+
     public bool RolledUp { get; set; }
+
+    /// <summary>Screen edge the pane is docked to: 0 none, 1 top, 2 bottom.</summary>
+    public int Dock { get; set; }
+
+    /// <summary>Docked panes unroll again when dragged away from their edge.</summary>
+    [JsonIgnore] public bool RolledByEdge => Dock != 0;
 
     /// <summary>Parsing names of the desktop icons this pane owns, in display order.</summary>
     public List<string> Items { get; set; } = new();
@@ -35,6 +44,8 @@ internal sealed class Pane
 internal sealed class Layout
 {
     public List<Pane> Panes { get; set; } = new();
+
+    public Settings Settings { get; set; } = new();
 
     /// <summary>
     /// A release the user chose not to install. Kept here rather than in a settings file of its

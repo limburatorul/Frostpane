@@ -1,22 +1,30 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Frostpane.Interop;
+using Frostpane.Model;
+using Color = System.Windows.Media.Color;
+using ColorConverter = System.Windows.Media.ColorConverter;
 using Point = System.Windows.Point;
 
 namespace Frostpane.Ui;
 
 internal enum Grip { None, Move, Left, Right, Top, Bottom, TopLeft, TopRight, BottomLeft, BottomRight }
 
+/// <summary>Which screen edge a pane was dropped against, if any.</summary>
+internal enum SnapEdge { None, Top, Bottom }
+
 /// <summary>
 /// One pane, as a top-level window pinned to the bottom of the Z-order.
 ///
 /// Top-level is the only placement that survives a GPU-composited wallpaper such as Wallpaper
 /// Engine — a window parented into the desktop hierarchy is simply never drawn while one runs.
-/// The cost is that the shell's icons can never appear on top of a pane, so the icons a pane
-/// owns are parked off-screen and drawn here instead.
+/// The cost is that the shell's icons can never appear on top of a pane, so the icons a pane owns
+/// are parked off-screen and drawn here instead.
 /// </summary>
 public partial class PaneWindow : Window
 {
@@ -29,6 +37,11 @@ public partial class PaneWindow : Window
 
     private const double ResizeEdge = 6;
 
+    /// <summary>How close to a screen edge a dragged pane latches onto it, in pixels.</summary>
+    private const int SnapDistance = 28;
+
+    private const double RollDuration = 170;
+
     private Grip _grip;
     private POINT _grabCursor;
     private RECT _grabBounds;
@@ -37,12 +50,23 @@ public partial class PaneWindow : Window
     private POINT _pressCursor;
     private bool _draggingTile;
 
+    private DispatcherTimer? _roll;
+    private bool _blurEnabled = true;
+
+    private readonly DispatcherTimer _hover;
+    private bool _rolled;
+    private bool _peeking;
+
     internal ObservableCollection<IconTile> Items { get; } = new();
 
     public PaneWindow()
     {
         InitializeComponent();
         Tiles.ItemsSource = Items;
+
+        _hover = new DispatcherTimer(DispatcherPriority.Input) { Interval = TimeSpan.FromMilliseconds(280) };
+        _hover.Tick += (_, _) => { _hover.Stop(); Peek(IsMouseOver); };
+
     }
 
     public IntPtr Handle => new WindowInteropHelper(this).Handle;
@@ -53,40 +77,82 @@ public partial class PaneWindow : Window
         set => TitleText.Text = value;
     }
 
-    /// <summary>Raised when a move or resize gesture finishes, with the new screen bounds.</summary>
-    internal event Action<RECT>? BoundsChanged;
+    /// <summary>Title bar height in physical pixels — the height of a rolled-up pane.</summary>
+    public int TitleBarHeightPixels => (int)Math.Round(TitleBar.Height * VisualTreeHelper.GetDpi(this).DpiScaleY);
 
-    internal event Action? RollUpToggled;
+    /// <summary>The edge the pane latched onto during the last move.</summary>
+    internal SnapEdge Edge { get; private set; }
 
-    /// <summary>Raised on right-click, with the screen point and the tile under it, if any.</summary>
-    internal event Action<POINT, IconTile?>? ContextMenuRequested;
+    // ---------- appearance ----------
 
-    internal event Action<IconTile>? ItemActivated;
+    public static readonly DependencyProperty IconSizeProperty =
+        DependencyProperty.Register(nameof(IconSize), typeof(double), typeof(PaneWindow), new PropertyMetadata(36.0));
 
-    /// <summary>Raised when a tile is dropped, with the screen point it was released at.</summary>
-    internal event Action<IconTile, POINT>? ItemDropped;
+    public static readonly DependencyProperty TileSizeProperty =
+        DependencyProperty.Register(nameof(TileSize), typeof(double), typeof(PaneWindow), new PropertyMetadata(86.0));
 
-    public void SetRolledUp(bool rolled) => Body.Visibility = rolled ? Visibility.Collapsed : Visibility.Visible;
+    public double IconSize
+    {
+        get => (double)GetValue(IconSizeProperty);
+        set => SetValue(IconSizeProperty, value);
+    }
 
-    /// <summary>Paints a blurred sample of the wallpaper behind the pane contents.</summary>
+    public double TileSize
+    {
+        get => (double)GetValue(TileSizeProperty);
+        set => SetValue(TileSizeProperty, value);
+    }
+
+    internal void ApplyAppearance(Settings settings)
+    {
+        Glass.Opacity = Math.Clamp(settings.BackgroundOpacity, 20, 100) / 100.0;
+
+        var tint = ParseColor(settings.TintColor);
+        tint.A = (byte)Math.Round(Math.Clamp(settings.TintStrength, 0, 90) * 255 / 100.0);
+        Tint.Background = new SolidColorBrush(tint);
+
+        _blurEnabled = settings.BlurWallpaper;
+        if (!_blurEnabled) Backdrop.Background = null;
+
+        PeekOnHover = settings.PeekOnHover;
+        IconSize = Math.Clamp(settings.IconSize, 24, 64);
+        TileSize = IconSize + 50;
+    }
+
+    private static Color ParseColor(string value)
+    {
+        try { return (Color)ColorConverter.ConvertFromString(value)!; }
+        catch (Exception) { return Color.FromRgb(0x14, 0x14, 0x19); }
+    }
+
+    /// <summary>Paints the blurred sample of the wallpaper behind the pane's contents.</summary>
     internal void SetBackdrop(ImageSource? image) =>
-        Backdrop.Background = image is null ? null : new ImageBrush(image) { Stretch = Stretch.Fill };
+        Backdrop.Background = image is null || !_blurEnabled
+            ? null
+            : new ImageBrush(image) { Stretch = Stretch.Fill };
+
+    // ---------- window ----------
 
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
 
-        long ex = Win32.GetWindowLong(Handle, Win32.GWL_EXSTYLE);
-        Win32.SetWindowLong(Handle, Win32.GWL_EXSTYLE, ex | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE);
-
+        RefuseActivation();
         HwndSource.FromHwnd(Handle)?.AddHook(KeepAtBottom);
         Win32.SetWindowPos(Handle, HWND_BOTTOM, 0, 0, 0, 0,
                            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
     }
 
+    /// <summary>Clicking a pane must never pull focus away from whatever the user was doing.</summary>
+    private void RefuseActivation()
+    {
+        long ex = Win32.GetWindowLong(Handle, Win32.GWL_EXSTYLE);
+        Win32.SetWindowLong(Handle, Win32.GWL_EXSTYLE, ex | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE);
+    }
+
     /// <summary>
-    /// Rewrites every Z-order change to "bottom". A pane belongs on the desktop, so it must
-    /// never rise above an ordinary window, however it came to be repositioned.
+    /// Rewrites every Z-order change to "bottom". A pane belongs on the desktop, so it must never
+    /// rise above an ordinary window, however it came to be repositioned.
     /// </summary>
     private static IntPtr KeepAtBottom(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
@@ -110,7 +176,98 @@ public partial class PaneWindow : Window
         get { Win32.GetWindowRect(Handle, out var r); return r; }
     }
 
+    public void SetRolledUp(bool rolled)
+    {
+        _rolled = rolled;
+        _peeking = false;
+        SetRolledUpVisual(rolled);
+    }
+
+    /// <summary>
+    /// Shows or hides the contents without changing whether the pane counts as rolled up. Used by
+    /// the hover peek, which is a look at a rolled-up pane rather than a change to it.
+    /// </summary>
+    internal void SetRolledUpVisual(bool rolled) =>
+        Body.Visibility = rolled ? Visibility.Collapsed : Visibility.Visible;
+
+    /// <summary>Whether hovering a rolled-up pane should open it for a look.</summary>
+    internal bool PeekOnHover { get; set; } = true;
+
+    /// <summary>Raised to open a rolled-up pane while the pointer is on it, and to close it after.</summary>
+    internal event Action<bool>? PeekRequested;
+
+    protected override void OnMouseEnter(MouseEventArgs e)
+    {
+        base.OnMouseEnter(e);
+        if (PeekOnHover && _rolled && !_peeking) _hover.Start();
+    }
+
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _hover.Stop();
+        if (_peeking) Peek(false);
+    }
+
+    private void Peek(bool open)
+    {
+        if (_grip != Grip.None) return;          // never fight a drag
+        if (open == _peeking || !_rolled) return;
+
+        _peeking = open;
+        PeekRequested?.Invoke(open);
+    }
+
+    /// <summary>Slides the pane to a new vertical position and height. Used for rolling up.</summary>
+    internal void AnimateTo(int y, int height, Action? completed = null)
+    {
+        _roll?.Stop();
+
+        var from = Bounds;
+        var clock = Stopwatch.StartNew();
+
+        _roll = new DispatcherTimer(TimeSpan.FromMilliseconds(8), DispatcherPriority.Render, (_, _) =>
+        {
+            double t = Math.Min(1, clock.Elapsed.TotalMilliseconds / RollDuration);
+            double eased = 1 - Math.Pow(1 - t, 3);
+
+            SetBounds(from.Left,
+                      (int)Math.Round(from.Top + (y - from.Top) * eased),
+                      from.Width,
+                      (int)Math.Round(from.Height + (height - from.Height) * eased));
+
+            if (t < 1) return;
+            _roll!.Stop();
+            completed?.Invoke();
+        }, Dispatcher);
+    }
+
+    /// <summary>
+    /// Raised when the user double-clicks the pane's name.
+    ///
+    /// Editing in place is not an option: a pane is a WS_EX_NOACTIVATE window pinned to the
+    /// bottom of the Z-order, so it cannot hold keyboard focus — a text box put there loses focus
+    /// the moment it gets it. The name is edited in a dialog instead.
+    /// </summary>
+    internal event Action? RenameRequested;
+
     // ---------- pointer ----------
+
+    /// <summary>Raised when a move or resize gesture finishes, with the new screen bounds.</summary>
+    internal event Action<RECT>? BoundsChanged;
+
+    internal event Action? RollUpToggled;
+
+    /// <summary>
+    /// Raised on right-click, with everything needed to place a menu: the screen point for
+    /// commands that act on a location, and the point inside this window for WPF's placement.
+    /// </summary>
+    internal event Action<POINT, Point, IconTile?>? ContextMenuRequested;
+
+    internal event Action<IconTile>? ItemActivated;
+
+    /// <summary>Raised when a tile is dropped, with the screen point it was released at.</summary>
+    internal event Action<IconTile, POINT>? ItemDropped;
 
     private Grip GripAt(Point p)
     {
@@ -166,7 +323,9 @@ public partial class PaneWindow : Window
 
         if (grip == Grip.Move && e.ClickCount == 2)
         {
-            RollUpToggled?.Invoke();
+            // The name renames; the rest of the bar rolls the pane up.
+            if (ReferenceEquals(e.OriginalSource, TitleText)) RenameRequested?.Invoke();
+            else RollUpToggled?.Invoke();
             e.Handled = true;
             return;
         }
@@ -184,7 +343,7 @@ public partial class PaneWindow : Window
 
         if (_grip != Grip.None)
         {
-            Resize(Win32.CursorPosition);
+            Drag(Win32.CursorPosition);
             return;
         }
 
@@ -233,11 +392,12 @@ public partial class PaneWindow : Window
     protected override void OnPreviewMouseRightButtonUp(MouseButtonEventArgs e)
     {
         base.OnPreviewMouseRightButtonUp(e);
-        ContextMenuRequested?.Invoke(Win32.CursorPosition, TileAt(e));
+
+        ContextMenuRequested?.Invoke(Win32.CursorPosition, e.GetPosition(this), TileAt(e));
         e.Handled = true;
     }
 
-    private void Resize(POINT cursor)
+    private void Drag(POINT cursor)
     {
         int dx = cursor.X - _grabCursor.X;
         int dy = cursor.Y - _grabCursor.Y;
@@ -250,9 +410,11 @@ public partial class PaneWindow : Window
         if (_grip == Grip.Move)
         {
             left += dx; right += dx; top += dy; bottom += dy;
+            SnapToScreenEdge(ref top, ref bottom);
         }
         else
         {
+            Edge = SnapEdge.None;
             if (_grip is Grip.Left or Grip.TopLeft or Grip.BottomLeft) left = Math.Min(left + dx, right - min);
             if (_grip is Grip.Right or Grip.TopRight or Grip.BottomRight) right = Math.Max(right + dx, left + min);
             if (_grip is Grip.Top or Grip.TopLeft or Grip.TopRight) top = Math.Min(top + dy, bottom - min / 2);
@@ -260,6 +422,30 @@ public partial class PaneWindow : Window
         }
 
         SetBounds(left, top, right - left, bottom - top);
+    }
+
+    /// <summary>Latches the pane onto the top or bottom edge of the screen it is being dragged on.</summary>
+    private void SnapToScreenEdge(ref int top, ref int bottom)
+    {
+        Edge = SnapEdge.None;
+
+        var screen = System.Windows.Forms.Screen.FromPoint(
+            new System.Drawing.Point((_grabBounds.Left + _grabBounds.Right) / 2, top));
+        var area = screen.WorkingArea;
+        int height = bottom - top;
+
+        if (Math.Abs(top - area.Top) <= SnapDistance)
+        {
+            top = area.Top;
+            bottom = top + height;
+            Edge = SnapEdge.Top;
+        }
+        else if (Math.Abs(bottom - area.Bottom) <= SnapDistance)
+        {
+            bottom = area.Bottom;
+            top = bottom - height;
+            Edge = SnapEdge.Bottom;
+        }
     }
 
     /// <summary>Walks up from the clicked element to the tile that owns it, if any.</summary>

@@ -46,22 +46,22 @@ SolidCompression=yes
 WizardStyle=modern
 
 [Languages]
-Name: "ro"; MessagesFile: "compiler:Default.isl"
+Name: "en"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "Creează o scurtătură pe desktop"; GroupDescription: "Scurtături:"; Flags: unchecked
+Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
 
 [Files]
 Source: "..\dist\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\Frostpane.exe"
-Name: "{group}\Dezinstalează {#AppName}"; Filename: "{uninstallexe}"
+Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Frostpane.exe"; Tasks: desktopicon
 
 [Run]
 ; No skipifsilent: a silent update must bring the app back up by itself.
-Filename: "{app}\Frostpane.exe"; Description: "Pornește {#AppName}"; Flags: nowait postinstall
+Filename: "{app}\Frostpane.exe"; Description: "Launch {#AppName}"; Flags: nowait postinstall
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{userappdata}\Frostpane"

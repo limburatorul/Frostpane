@@ -40,12 +40,16 @@ Rezultatul ajunge în `dist/`. Versiunea se schimbă într-un singur loc, `<Vers
 
 | | |
 |---|---|
-| **Panou** | Dreptunghi translucid cu titlu. Trage de titlu ca să-l muți, de margini ca să-l redimensionezi, dublu-click pe titlu ca să-l pliezi. |
+| **Panou** | Dreptunghi translucid cu titlu. Trage de titlu ca să-l muți, de margini ca să-l redimensionezi. |
+| **Pliere** | Dublu-click pe bară pliază și depliază, animat. Dublu-click pe **nume** redenumește. |
+| **Lipire de margine** | Tras pe marginea de sus sau de jos a ecranului, panoul se lipește și se pliază singur. Tras înapoi, se depliază. |
+| **Peek la hover** | Cu mouse-ul pe un panou pliat, acesta se deschide cât stai pe el; se închide la loc când pleci. |
+| **Setări** | Blur pornit/oprit, opacitatea fundalului, intensitatea și culoarea tentei, mărimea iconițelor, peek, pornire la logon. Din tray sau din click dreapta pe panou. |
 | **Adopție** | Orice iconiță pe care o tragi pe desktop peste un panou intră în el. Shell-ul o mută, noi o revendicăm. |
 | **Lansare** | Dublu-click pe o iconiță dintr-un panou o deschide, cu verbul implicit al shell-ului. |
 | **Meniu contextual** | Click dreapta pe o iconiță: Deschide / Redenumește / Șterge / Proprietăți — dialogurile reale ale Windows-ului. |
 | **Portal** | Un panou care oglindește un folder de pe disc, cu miniaturi reale, actualizat automat. |
-| **Blur** | Fundalul fiecărui panou e o probă blurată a wallpaper-ului, actualizată ~10 ori pe secundă. |
+| **Blur** | Fundalul fiecărui panou e o probă blurată a wallpaper-ului, actualizată ~10 ori pe secundă. Pe un wallpaper aproape negru proba iese tot neagră, așa că opacitatea fundalului e reglabilă: sub 100% se vede wallpaper-ul viu prin panou. |
 | **Meniu pe desktop** | Click dreapta pe desktop → **Panou nou aici** / **Portal nou aici**. Pe Windows 11 sunt sub „Show more options" (sau direct la Shift+click dreapta): meniul compact acceptă doar handler-e din pachete MSIX semnate. |
 | **Persistență** | `%APPDATA%\Frostpane\layout.json`. |
 
@@ -99,6 +103,15 @@ Trei plase de siguranță:
 - la ieșire, toate iconițele sunt returnate desktopului;
 - la fiecare ciclu, orice iconiță parcată pe care n-o revendică niciun panou e adusă înapoi;
 - meniul din tray are **Eliberează toate iconițele**.
+
+## Detalii de implementare care nu se văd
+
+- **Interfața aplicației e în engleză**; documentația a rămas în română.
+- Un panou e o fereastră `WS_EX_NOACTIVATE` fixată la baza Z-order-ului, ca un click în el să nu
+  fure focusul. De aici două consecințe: numele nu se poate edita pe loc, fiindcă o astfel de
+  fereastră nu poate ține focusul de tastatură — redenumirea se face într-un dialog; și meniul
+  contextual e un `ContextMenu` WPF, nu unul WinForms, fiindcă un `ContextMenuStrip` afișat de o
+  aplicație care nu e în prim-plan se închide în aceeași clipă în care se deschide.
 
 ## Limitări cunoscute
 

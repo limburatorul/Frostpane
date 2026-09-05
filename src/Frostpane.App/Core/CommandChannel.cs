@@ -46,6 +46,9 @@ internal sealed class CommandChannel : IDisposable
         _source.AddHook(OnMessage);
     }
 
+    /// <summary>The app's stand-in top-level window, used as the owner of pop-up menus.</summary>
+    public IntPtr WindowHandle => _source.Handle;
+
     public event Action<ShellCommand>? Received;
 
     /// <summary>Raised when Windows or an installer asks the app to quit.</summary>

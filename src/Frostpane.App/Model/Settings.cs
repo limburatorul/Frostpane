@@ -1,0 +1,31 @@
+namespace Frostpane.Model;
+
+/// <summary>
+/// How panes look. Shared by every pane; there are no per-pane appearance options.
+///
+/// The defaults aim for frosted glass, but a blurred sample of a nearly black wallpaper is itself
+/// nearly black, which reads as a solid box rather than glass. <see cref="BackgroundOpacity"/> is
+/// the way out: below 100 the live wallpaper shows through, so the pane stays visibly a pane.
+/// </summary>
+internal sealed class Settings
+{
+    /// <summary>Blur the wallpaper behind a pane. Off leaves plain tinted translucency.</summary>
+    public bool BlurWallpaper { get; set; } = true;
+
+    /// <summary>Opacity of a pane's whole background, 20–100. Contents stay fully opaque.</summary>
+    public int BackgroundOpacity { get; set; } = 82;
+
+    /// <summary>How strongly <see cref="TintColor"/> covers the backdrop, 0–90.</summary>
+    public int TintStrength { get; set; } = 45;
+
+    /// <summary>Tint applied over the backdrop, as #RRGGBB.</summary>
+    public string TintColor { get; set; } = "#141419";
+
+    /// <summary>Unroll a rolled-up pane while the pointer rests on it, then roll it back.</summary>
+    public bool PeekOnHover { get; set; } = true;
+
+    /// <summary>Icon edge in device-independent pixels, 24–64.</summary>
+    public int IconSize { get; set; } = 36;
+
+    public Settings Clone() => (Settings)MemberwiseClone();
+}

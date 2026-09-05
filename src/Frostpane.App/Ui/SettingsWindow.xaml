@@ -1,0 +1,106 @@
+<Window x:Class="Frostpane.Ui.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Frostpane settings"
+        Width="430"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        Background="#1B1B21"
+        Foreground="#F0F0F4"
+        TextOptions.TextFormattingMode="Display"
+        ShowInTaskbar="False"
+        Topmost="True">
+
+    <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#F0F0F4" />
+        </Style>
+        <Style x:Key="Heading" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#9FB4FF" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style x:Key="Row" TargetType="Grid">
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#F0F0F4" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#F0F0F4" />
+            <Setter Property="Margin" Value="0,0,16,0" />
+        </Style>
+    </Window.Resources>
+
+    <StackPanel Margin="20">
+        <TextBlock Text="Appearance" Style="{StaticResource Heading}" />
+
+        <CheckBox x:Name="BlurBox" Content="Blur the wallpaper behind panes" />
+
+        <Grid Style="{StaticResource Row}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="46" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Background opacity" VerticalAlignment="Center" />
+            <Slider x:Name="OpacitySlider" Grid.Column="1" Minimum="20" Maximum="100"
+                    TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
+                       Text="{Binding Value, ElementName=OpacitySlider, StringFormat={}{0:0}%}" />
+        </Grid>
+
+        <Grid Style="{StaticResource Row}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="46" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Tint strength" VerticalAlignment="Center" />
+            <Slider x:Name="TintSlider" Grid.Column="1" Minimum="0" Maximum="90"
+                    TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
+                       Text="{Binding Value, ElementName=TintSlider, StringFormat={}{0:0}%}" />
+        </Grid>
+
+        <Grid Style="{StaticResource Row}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Tint colour" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <RadioButton x:Name="TintDark" Content="Dark" GroupName="Tint" />
+                <RadioButton x:Name="TintNeutral" Content="Neutral" GroupName="Tint" />
+                <RadioButton x:Name="TintLight" Content="Light" GroupName="Tint" />
+            </StackPanel>
+        </Grid>
+
+        <Grid Style="{StaticResource Row}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="46" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Icon size" VerticalAlignment="Center" />
+            <Slider x:Name="IconSlider" Grid.Column="1" Minimum="24" Maximum="64"
+                    TickFrequency="2" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
+                       Text="{Binding Value, ElementName=IconSlider, StringFormat={}{0:0}px}" />
+        </Grid>
+
+        <TextBlock Text="Behaviour" Style="{StaticResource Heading}" Margin="0,10,0,8" />
+        <CheckBox x:Name="PeekBox" Content="Open a rolled-up pane while hovering it" />
+        <CheckBox x:Name="AutostartBox" Content="Start with Windows" />
+
+        <TextBlock TextWrapping="Wrap" Foreground="#9A9AA6" FontSize="11" Margin="0,4,0,0"
+                   Text="A blurred sample of a nearly black wallpaper is itself nearly black. Lower the background opacity to let the live wallpaper show through instead." />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button x:Name="ResetButton" Content="Reset" Width="90" Height="28" Margin="0,0,8,0" />
+            <Button x:Name="CloseButton" Content="Close" Width="90" Height="28" IsDefault="True" />
+        </StackPanel>
+    </StackPanel>
+</Window>

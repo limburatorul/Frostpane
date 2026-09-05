@@ -16,10 +16,10 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>app.ico</ApplicationIcon>
 
-    <Version>1.0.1</Version>
+    <Version>1.1.0</Version>
     <Product>Frostpane</Product>
     <AssemblyTitle>Frostpane</AssemblyTitle>
-    <Description>Pane-uri pe desktop, cu blur pe wallpaper animat</Description>
+    <Description>Desktop panes that group your icons, over a blurred wallpaper</Description>
     <Company>limburatorul</Company>
     <Copyright>Copyright © 2026</Copyright>
     <!-- DPI awareness must come from the manifest: WinForms' runtime API applies too late for WPF. -->

@@ -38,8 +38,8 @@ internal static class ShellMenu
         bool wrote = false;
         foreach (string root in Roots)
         {
-            wrote |= Verb(root, "Frostpane.NewPane", "Panou nou aici", "--new-pane", exe);
-            wrote |= Verb(root, "Frostpane.NewPortal", "Portal nou aici…", "--new-portal", exe);
+            wrote |= Verb(root, "Frostpane.NewPane", "New pane here", "--new-pane", exe);
+            wrote |= Verb(root, "Frostpane.NewPortal", "New portal here…", "--new-portal", exe);
         }
 
         // Without this the shell can keep serving the verb list it read before we existed.
@@ -55,7 +55,7 @@ internal static class ShellMenu
         if (verb is null) return false;
 
         using var commandKey = Registry.CurrentUser.CreateSubKey($@"{root}\{key}\command");
-        if (commandKey?.GetValue("") as string == command) return false;
+        if (commandKey?.GetValue("") as string == command && verb.GetValue("") as string == label) return false;
 
         verb.SetValue("", label);                   // the default value is the label the shell shows
         verb.SetValue("Icon", $"\"{exe}\",0");

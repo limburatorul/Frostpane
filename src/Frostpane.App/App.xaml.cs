@@ -41,7 +41,7 @@ public partial class App : Application
         _layer = new DesktopLayer();
         if (!_layer.IsValid)
         {
-            MessageBox.Show("Nu am găsit desktopul Explorer-ului (SHELLDLL_DefView).",
+            MessageBox.Show("Could not find the Explorer desktop (SHELLDLL_DefView).",
                             "Frostpane", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
             return;
@@ -49,6 +49,7 @@ public partial class App : Application
 
         _manager = new PaneManager(_layer);
         _manager.ContextMenuRequested += ShowPaneMenu;
+        _manager.RenameRequested += AskRename;
 
         ShellMenu.Register();
         _commands = new CommandChannel();
@@ -91,26 +92,27 @@ public partial class App : Application
     private ContextMenuStrip BuildTrayMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Panou nou", null, (_, _) => NewPaneAtCursor());
-        menu.Items.Add("Portal nou…", null, (_, _) => NewPortalAtCursor());
+        menu.Items.Add("New pane", null, (_, _) => NewPaneAtCursor());
+        menu.Items.Add("New portal…", null, (_, _) => NewPortalAtCursor());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Eliberează toate iconițele", null, (_, _) => _manager!.ReleaseAllIcons());
+        menu.Items.Add("Release all icons", null, (_, _) => _manager!.ReleaseAllIcons());
         menu.Items.Add(new ToolStripSeparator());
 
-        var startup = new ToolStripMenuItem("Pornește odată cu Windows") { Checked = Autostart.Enabled };
+        var startup = new ToolStripMenuItem("Start with Windows") { Checked = Autostart.Enabled };
         startup.Click += (_, _) => startup.Checked = Autostart.Enabled = !Autostart.Enabled;
         menu.Items.Add(startup);
+        menu.Items.Add("Settings…", null, (_, _) => ShowSettings());
 
         menu.Items.Add(new ToolStripSeparator());
 
-        _updateItem = menu.Items.Add("Verifică actualizări", null, (_, _) =>
+        _updateItem = menu.Items.Add("Check for updates", null, (_, _) =>
         {
             if (_pending is not null) OfferPendingUpdate();
             else _ = CheckForUpdatesAsync(announce: true);
         });
 
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Ieșire", null, (_, _) => Shutdown());
+        menu.Items.Add("Exit", null, (_, _) => Shutdown());
         return menu;
     }
 
@@ -133,7 +135,7 @@ public partial class App : Application
 
     private void NewPortalAtCursor()
     {
-        using var picker = new FolderBrowserDialog { Description = "Alege folderul oglindit de portal" };
+        using var picker = new FolderBrowserDialog { Description = "Choose the folder this portal mirrors" };
         if (picker.ShowDialog() != DialogResult.OK) return;
 
         _manager!.Create(_layer!.ScreenToDesktop(Win32.CursorPosition),
@@ -141,33 +143,73 @@ public partial class App : Application
                          picker.SelectedPath);
     }
 
-    private void ShowPaneMenu(Pane pane, IconTile? tile, POINT screen)
+    /// <summary>
+    /// The pane's own menu, built with WPF rather than WinForms.
+    ///
+    /// A WinForms ContextMenuStrip needs the WinForms message loop to stay open, which a WPF app
+    /// does not run: the menu appeared and vanished in the same frame. WPF's own menu works from
+    /// a window that never takes focus.
+    /// </summary>
+    private void ShowPaneMenu(Pane pane, IconTile? tile, PaneMenuContext where)
     {
-        var menu = new ContextMenuStrip();
+        var menu = new System.Windows.Controls.ContextMenu
+        {
+            Placement = System.Windows.Controls.Primitives.PlacementMode.RelativePoint,
+            PlacementTarget = where.Target,
+            HorizontalOffset = where.Local.X,
+            VerticalOffset = where.Local.Y,
+        };
 
         if (tile is not null)
         {
-            menu.Items.Add("Deschide", null, (_, _) => _manager!.InvokeVerb(pane, tile.Id, null));
+            Add(menu, "Open", () => _manager!.InvokeVerb(pane, tile.Id, null));
             if (!pane.IsPortal)
             {
-                menu.Items.Add("Redenumește fișierul…", null, (_, _) => _manager!.InvokeVerb(pane, tile.Id, "rename"));
-                menu.Items.Add("Șterge fișierul", null, (_, _) => _manager!.InvokeVerb(pane, tile.Id, "delete"));
+                Add(menu, "Rename file…", () => _manager!.InvokeVerb(pane, tile.Id, "rename"));
+                Add(menu, "Delete file", () => _manager!.InvokeVerb(pane, tile.Id, "delete"));
             }
-            menu.Items.Add("Proprietăți", null, (_, _) => _manager!.InvokeVerb(pane, tile.Id, "properties"));
-            menu.Items.Add(new ToolStripSeparator());
+            Add(menu, "Properties", () => _manager!.InvokeVerb(pane, tile.Id, "properties"));
+            menu.Items.Add(new System.Windows.Controls.Separator());
         }
 
-        menu.Items.Add("Redenumește panoul…", null, (_, _) =>
-        {
-            string? name = Prompt.AskText("Redenumește panoul", pane.Label);
-            if (!string.IsNullOrWhiteSpace(name)) _manager!.Rename(pane, name);
-        });
-        menu.Items.Add(pane.RolledUp ? "Depliază" : "Pliază", null, (_, _) => _manager!.ToggleRollUp(pane));
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Panou nou aici", null, (_, _) => _manager!.Create(_layer!.ScreenToDesktop(screen)));
-        menu.Items.Add("Șterge panoul", null, (_, _) => _manager!.Remove(pane));
+        Add(menu, "Rename pane…", () => AskRename(pane));
+        Add(menu, pane.RolledUp ? "Unroll" : "Roll up", () => _manager!.ToggleRollUp(pane));
+        menu.Items.Add(new System.Windows.Controls.Separator());
+        Add(menu, "New pane here", () => _manager!.Create(_layer!.ScreenToDesktop(where.Screen)));
+        Add(menu, "Delete pane", () => _manager!.Remove(pane));
+        menu.Items.Add(new System.Windows.Controls.Separator());
+        Add(menu, "Settings…", ShowSettings);
 
-        menu.Show(new System.Drawing.Point(screen.X, screen.Y));
+        menu.IsOpen = true;
+    }
+
+    private static void Add(System.Windows.Controls.ContextMenu menu, string header, Action action)
+    {
+        var item = new System.Windows.Controls.MenuItem { Header = header };
+        item.Click += (_, _) => action();
+        menu.Items.Add(item);
+    }
+
+    private void AskRename(Pane pane)
+    {
+        string? name = Prompt.AskText("Rename pane", pane.Label);
+        if (!string.IsNullOrWhiteSpace(name)) _manager!.Rename(pane, name);
+    }
+
+    private SettingsWindow? _settingsWindow;
+
+    private void ShowSettings()
+    {
+        if (_settingsWindow is { IsLoaded: true })
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+
+        _settingsWindow = new SettingsWindow(_manager!.Settings, () => _manager!.ApplySettings());
+        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow.Show();
+        _settingsWindow.Activate();   // the app is never foreground, so Show alone leaves it behind
     }
 
     // ---------- updates ----------
@@ -178,7 +220,7 @@ public partial class App : Application
         if (update is null)
         {
             if (announce)
-                MessageBox.Show($"Folosești deja cea mai nouă versiune ({Updater.Current.ToString(3)}).",
+                MessageBox.Show($"You are already on the latest version ({Updater.Current.ToString(3)}).",
                                 "Frostpane", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -186,8 +228,8 @@ public partial class App : Application
         string label = update.Version.ToString(3);
 
         _pending = update;
-        if (_updateItem is not null) _updateItem.Text = $"Instalează versiunea {label}";
-        if (_tray is not null) _tray.Text = $"Frostpane {Updater.Current.ToString(3)} — {label} disponibilă";
+        if (_updateItem is not null) _updateItem.Text = $"Install version {label}";
+        if (_tray is not null) _tray.Text = $"Frostpane {Updater.Current.ToString(3)} — {label} available";
 
         // A tray balloon goes through the Windows notification centre, where it is routinely
         // suppressed, so the offer has to be a dialog. Declining silences that one version.
@@ -199,8 +241,8 @@ public partial class App : Application
         if (_pending is not { } update) return;
         string label = update.Version.ToString(3);
 
-        var answer = MessageBox.Show($"Versiunea {label} e disponibilă (ai {Updater.Current.ToString(3)}).\n\n" +
-                                     "O instalez acum? Aplicația se va reporni singură.",
+        var answer = MessageBox.Show($"Version {label} is available (you have {Updater.Current.ToString(3)}).\n\n" +
+                                     "Install it now? Frostpane will restart itself.",
                                      "Frostpane", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (answer != MessageBoxResult.Yes)
         {
@@ -220,7 +262,7 @@ public partial class App : Application
             return;
         }
 
-        MessageBox.Show("Nu am reușit să descarc actualizarea. Încearcă mai târziu.",
+        MessageBox.Show("The update could not be downloaded. Try again later.",
                         "Frostpane", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 

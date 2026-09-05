@@ -123,10 +123,14 @@ internal sealed class PaneManager : IDisposable
         double scaleX = _wallpaper.PixelWidth / _wallpaperSource.Width;
         double scaleY = _wallpaper.PixelHeight / _wallpaperSource.Height;
 
-        int x = (int)Math.Floor(pane.X * scaleX);
-        int y = (int)Math.Floor(pane.Y * scaleY);
-        int width = (int)Math.Ceiling(pane.Width * scaleX);
-        int height = (int)Math.Ceiling(pane.Height * scaleY);
+        // Read the window rather than the model: while peeking or animating they differ.
+        var bounds = window.Bounds;
+        var origin = _layer.Origin;
+
+        int x = (int)Math.Floor((bounds.Left - origin.X) * scaleX);
+        int y = (int)Math.Floor((bounds.Top - origin.Y) * scaleY);
+        int width = (int)Math.Ceiling(bounds.Width * scaleX);
+        int height = (int)Math.Ceiling(bounds.Height * scaleY);
 
         x = Math.Clamp(x, 0, _wallpaper.PixelWidth - 1);
         y = Math.Clamp(y, 0, _wallpaper.PixelHeight - 1);
@@ -138,6 +142,17 @@ internal sealed class PaneManager : IDisposable
         window.SetBackdrop(crop);
     }
 
+    /// <summary>Appearance shared by every pane.</summary>
+    public Settings Settings => _layout.Settings;
+
+    /// <summary>Pushes the current settings onto every open pane.</summary>
+    public void ApplySettings()
+    {
+        foreach (var window in _windows.Values) window.ApplyAppearance(_layout.Settings);
+        foreach (var pane in _layout.Panes) ApplyBackdrop(pane);
+        Save();
+    }
+
     /// <summary>The release the user declined, so the app stops offering it.</summary>
     public string? SkippedUpdate
     {
@@ -145,12 +160,15 @@ internal sealed class PaneManager : IDisposable
         set { _layout.SkippedUpdate = value; Save(); }
     }
 
-    /// <summary>Raised when a pane is right-clicked, with the screen point and the tile under it.</summary>
-    public event Action<Pane, IconTile?, POINT>? ContextMenuRequested;
+    /// <summary>Raised when the user double-clicks a pane's name and expects to rename it.</summary>
+    public event Action<Pane>? RenameRequested;
+
+    /// <summary>Raised when a pane is right-clicked, with everything needed to place a menu.</summary>
+    public event Action<Pane, IconTile?, PaneMenuContext>? ContextMenuRequested;
 
     // ---------- panes ----------
 
-    public Pane Create(POINT desktopPoint, string label = "Panou", string? portalPath = null)
+    public Pane Create(POINT desktopPoint, string label = "Pane", string? portalPath = null)
     {
         var pane = new Pane
         {
@@ -185,26 +203,72 @@ internal sealed class PaneManager : IDisposable
         Save();
     }
 
-    public void ToggleRollUp(Pane pane)
+    public void ToggleRollUp(Pane pane) => SetRolledUp(pane, !pane.RolledUp, SnapEdge.None);
+
+    /// <summary>
+    /// Rolls a pane up or down, sliding rather than jumping. A pane rolled up against the bottom
+    /// edge also moves down, so its title bar stays on the edge it was docked to.
+    /// </summary>
+    private void SetRolledUp(Pane pane, bool rolled, SnapEdge edge)
     {
-        if (pane.RolledUp)
+        if (pane.RolledUp == rolled) return;
+        if (!_windows.TryGetValue(pane.Id, out var window)) return;
+
+        int screenY;
+        if (rolled)
         {
-            pane.RolledUp = false;
-            pane.Height = pane.ExpandedHeight;
+            pane.ExpandedHeight = pane.Height;
+            pane.ExpandedY = pane.Y;
+            pane.RolledUp = true;
+            pane.Dock = (int)edge;
+
+            int height = window.TitleBarHeightPixels;
+            if (edge == SnapEdge.Bottom) pane.Y = pane.Y + pane.Height - height;
+            pane.Height = height;
+
+            screenY = pane.Y + _layer.Origin.Y;
+            window.AnimateTo(screenY, pane.Height, () => window.SetRolledUp(true));
         }
         else
         {
-            pane.ExpandedHeight = pane.Height;
-            pane.RolledUp = true;
-            pane.Height = TitleHeight(pane);
+            pane.RolledUp = false;
+            pane.Dock = 0;
+            pane.Y = pane.ExpandedY;
+            pane.Height = pane.ExpandedHeight;
+
+            window.SetRolledUp(false);
+            screenY = pane.Y + _layer.Origin.Y;
+            window.AnimateTo(screenY, pane.Height);
         }
 
-        if (_windows.TryGetValue(pane.Id, out var window))
-        {
-            window.SetRolledUp(pane.RolledUp);
-            Place(pane, window);
-        }
+        ApplyBackdrop(pane);
         Save();
+    }
+
+    /// <summary>
+    /// Opens a rolled-up pane while the pointer rests on it, without changing what the layout
+    /// says: this is a look, not a state change, so the pane is still rolled up afterwards.
+    /// </summary>
+    private void Peek(Pane pane, bool open)
+    {
+        if (!pane.RolledUp || !_windows.TryGetValue(pane.Id, out var window)) return;
+
+        int screenY = pane.Y + _layer.Origin.Y;
+
+        if (open)
+        {
+            // A pane docked to the bottom edge has to grow upwards to stay on screen.
+            int y = pane.Dock == (int)SnapEdge.Bottom
+                ? screenY - (pane.ExpandedHeight - pane.Height)
+                : screenY;
+
+            window.SetRolledUpVisual(false);
+            window.AnimateTo(y, pane.ExpandedHeight);
+        }
+        else
+        {
+            window.AnimateTo(screenY, pane.Height, () => window.SetRolledUpVisual(true));
+        }
     }
 
     private int TitleHeight(Pane pane) =>
@@ -224,16 +288,26 @@ internal sealed class PaneManager : IDisposable
             pane.Y = bounds.Top - origin.Y;
             pane.Width = bounds.Width;
             pane.Height = bounds.Height;
+            pane.ExpandedY = pane.Y;
             if (!pane.RolledUp) pane.ExpandedHeight = pane.Height;
+
+            // Dropping a pane on a screen edge rolls it up; dragging it off unrolls it again.
+            if (window.Edge != SnapEdge.None) SetRolledUp(pane, true, window.Edge);
+            else if (pane.RolledByEdge) SetRolledUp(pane, false, SnapEdge.None);
+
             ApplyBackdrop(pane);
             Save();
             Reconcile();
         };
         window.RollUpToggled += () => ToggleRollUp(pane);
-        window.ContextMenuRequested += (pt, tile) => ContextMenuRequested?.Invoke(pane, tile, pt);
+        window.PeekRequested += open => Peek(pane, open);
+        window.RenameRequested += () => RenameRequested?.Invoke(pane);
+        window.ContextMenuRequested += (screen, local, tile) =>
+            ContextMenuRequested?.Invoke(pane, tile, new PaneMenuContext(screen, local, window));
         window.ItemActivated += tile => InvokeVerb(pane, tile.Id, null);
         window.ItemDropped += (tile, pt) => DropItem(pane, tile, pt);
 
+        window.ApplyAppearance(_layout.Settings);
         window.Show();
         window.SetRolledUp(pane.RolledUp);
         Place(pane, window);
